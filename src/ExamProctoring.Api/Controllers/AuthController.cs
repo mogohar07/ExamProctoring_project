@@ -2,13 +2,14 @@ using ExamProctoring.Api.Authorization;
 using ExamProctoring.Api.Errors;
 using ExamProctoring.Api.RateLimiting;
 using ExamProctoring.Application.Auth;
+using ExamProctoring.Application.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace ExamProctoring.Api.Controllers;
 
-// Authentication endpoints (§6.9). So far: student sign-up, login, refresh and the caller's own account.
+// Authentication endpoints (§6.9): student sign-up, login, refresh, logout, change password and the caller's own account.
 [ApiController]
 [Route("api/auth")]
 public sealed class AuthController(AuthService authService) : ControllerBase
@@ -51,6 +52,46 @@ public sealed class AuthController(AuthService authService) : ControllerBase
         var result = await authService.RefreshAsync(request, cancellationToken);
 
         return result.IsSuccess ? Ok(result.Value) : this.ToProblem(result.Error!);
+    }
+
+    // §6.9, D3, D8. Ends the session of the given refresh token (its whole token family); other sessions stay.
+    // The access token used here stays valid until it expires (§6.6). Always 204 for a valid access token.
+    [HttpPost("logout")]
+    [Authorize]
+    [AllowedDuringPasswordChange]
+    [RequestSizeLimit(TokenEndpointMaxBodyBytes)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge, "application/problem+json")]
+    public async Task<IActionResult> Logout(LogoutRequest request, CancellationToken cancellationToken)
+    {
+        var result = await authService.LogoutAsync(request, cancellationToken);
+
+        return result.IsSuccess ? NoContent() : this.ToProblem(result.Error!);
+    }
+
+    // §6.4, §6.5, D7, D9. Also the way out of a forced password change (§6.3). Returns a new token pair; every
+    // previous session and access token of the user stops working.
+    [HttpPost("change-password")]
+    [Authorize]
+    [AllowedDuringPasswordChange]
+    [RequestSizeLimit(TokenEndpointMaxBodyBytes)]
+    [ProducesResponseType<TokenResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge, "application/problem+json")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken)
+    {
+        var result = await authService.ChangePasswordAsync(request, cancellationToken);
+        if (result.IsSuccess)
+            return Ok(result.Value);
+
+        // D9: a locked account is 403 here, not login's 401: the caller is authenticated, and a 401 would make
+        // clients refresh their token and retry.
+        return this.ToProblem(result.Error!,
+            result.Error!.Code == ErrorCodes.AccountLocked ? StatusCodes.Status403Forbidden : null);
     }
 
     // §6.9. Any active user, also while a password change is required (§6.3).

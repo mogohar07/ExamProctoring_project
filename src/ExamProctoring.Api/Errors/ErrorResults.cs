@@ -23,9 +23,10 @@ public static class ErrorResults
         [ErrorCodes.RefreshTokenReused] = StatusCodes.Status401Unauthorized,
     };
 
-    public static IActionResult ToProblem(this ControllerBase controller, AppError error)
+    // statusCode overrides the usual status for the code, for an endpoint that documents a different one.
+    public static IActionResult ToProblem(this ControllerBase controller, AppError error, int? statusCode = null)
     {
-        var statusCode = StatusCodesByErrorCode.GetValueOrDefault(error.Code, StatusCodes.Status500InternalServerError);
+        statusCode ??= StatusCodesByErrorCode.GetValueOrDefault(error.Code, StatusCodes.Status500InternalServerError);
         var factory = controller.HttpContext.RequestServices.GetRequiredService<ProblemDetailsFactory>();
 
         ProblemDetails problem;

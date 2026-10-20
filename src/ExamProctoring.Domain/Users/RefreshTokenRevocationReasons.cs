@@ -9,4 +9,10 @@ public static class RefreshTokenRevocationReasons
 
     // Revoked because an already-rotated token of the family was presented again.
     public const string ReuseDetected = "reuse_detected";
+
+    // Revoked when the user logged out of that session.
+    public const string Logout = "logout";
+
+    // Revoked, with every other session of the user, when the password was changed.
+    public const string PasswordChanged = "password_changed";
 }

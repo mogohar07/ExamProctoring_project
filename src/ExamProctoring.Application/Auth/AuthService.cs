@@ -8,13 +8,20 @@ using Microsoft.Extensions.Logging;
 
 namespace ExamProctoring.Application.Auth;
 
-// Authentication use cases (§4.3). So far: student sign-up, login, refresh and the caller's own account.
+// Authentication use cases (§4.3): student sign-up, login, refresh, logout, change password and the caller's own account.
+//
+// Session changes for one account are serialized: login, refresh, logout and change-password each take the account
+// row's update lock as the first write of their transaction (holds across API instances). Login and refresh also
+// re-check the security stamp under that lock, so no session can be created or renewed with credentials that a
+// concurrent password change has just replaced, and a logout or password change always sees every session.
 public sealed class AuthService(
     UserManager<ApplicationUser> userManager,
     IAppDbContext db,
     IValidator<RegisterStudentRequest> validator,
     IValidator<LoginRequest> loginValidator,
     IValidator<RefreshRequest> refreshValidator,
+    IValidator<LogoutRequest> logoutValidator,
+    IValidator<ChangePasswordRequest> changePasswordValidator,
     ITokenService tokenService,
     IClock clock,
     ICurrentUser currentUser,
@@ -62,6 +69,18 @@ public sealed class AuthService(
         var refreshToken = tokenService.CreateRefreshToken();
         await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
         {
+            // Sets LastLoginAt and takes the account row lock in one statement, only if the account is still active
+            // with the security stamp read above. A direct update, so a concurrent failed-login count cannot make it fail.
+            var stillCurrent = await db.Users
+                .Where(u => u.Id == user.Id && u.SecurityStamp == user.SecurityStamp && u.AccountStatus == AccountStatus.Active)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.LastLoginAt, now), cancellationToken);
+            if (stillCurrent == 0)
+            {
+                // The password was changed (or the account deactivated) while this login was being checked.
+                await transaction.RollbackAsync(CancellationToken.None);
+                return InvalidCredentials();
+            }
+
             db.RefreshTokens.Add(new RefreshToken
             {
                 UserId = user.Id,
@@ -71,10 +90,6 @@ public sealed class AuthService(
                 ExpiresAt = refreshToken.ExpiresAt,
             });
             await db.SaveChangesAsync(cancellationToken);
-
-            // A direct update, so a concurrent change to the user row (such as a failed-login count) cannot make it fail.
-            await db.Users.Where(u => u.Id == user.Id)
-                .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.LastLoginAt, now), cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
         }
@@ -122,6 +137,13 @@ public sealed class AuthService(
         var refreshToken = tokenService.CreateRefreshToken();
         await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
         {
+            if (!await LockAccountAsync(user.Id, cancellationToken, expectedSecurityStamp: user.SecurityStamp))
+            {
+                // A password change (or deactivation) committed after the checks above: the session is over.
+                await transaction.RollbackAsync(CancellationToken.None);
+                return RefreshTokenInvalid();
+            }
+
             var replacement = new RefreshToken
             {
                 UserId = user.Id,
@@ -145,11 +167,125 @@ public sealed class AuthService(
 
             if (rotated == 0)
             {
-                // Another request rotated this token first, so it has been used twice: undo our replacement and
-                // treat it as a replay. Clients must send one refresh at a time per session (D4).
+                // The token was revoked after it was read: undo our replacement and look at why. Rotated by another
+                // request means it was used twice, a replay (D4: clients send one refresh at a time per session);
+                // revoked by a logout or password change is an ordinary invalid token (D5).
                 await transaction.RollbackAsync(CancellationToken.None);
-                return await RevokeFamilyAfterReuseAsync(presented, now);
+                var current = await db.RefreshTokens.AsNoTracking()
+                    .SingleOrDefaultAsync(t => t.Id == presented.Id, CancellationToken.None);
+                return current?.ReplacedByTokenId is null
+                    ? RefreshTokenInvalid()
+                    : await RevokeFamilyAfterReuseAsync(current, now);
             }
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        return Result<TokenResponse>.Success(CreateTokenResponse(user, role, refreshToken));
+    }
+
+    // POST /api/auth/logout (§6.6, §6.9, D3, D8). Ends one session: every still-active token of the given refresh
+    // token's family is revoked. Other sessions of the user are untouched, and the access token used for this call
+    // expires naturally (§6.6). Unknown tokens, another user's tokens and already revoked or expired tokens get the
+    // same success, so the answer reveals nothing about the token.
+    public async Task<Result<bool>> LogoutAsync(LogoutRequest request, CancellationToken cancellationToken)
+    {
+        var fieldErrors = await ValidateFieldsAsync(logoutValidator, request, cancellationToken);
+        if (fieldErrors.Count > 0)
+            return Result<bool>.Failure(new AppError(ErrorCodes.ValidationFailed, "One or more fields are invalid.", fieldErrors));
+
+        var userId = currentUser.UserId;
+        var tokenHash = tokenService.HashRefreshToken(request.RefreshToken!);
+        var familyId = await db.RefreshTokens.AsNoTracking()
+            .Where(t => t.TokenHash == tokenHash && t.UserId == userId)
+            .Select(t => (Guid?)t.FamilyId)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (familyId is not null)
+        {
+            var now = clock.UtcNow;
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+            // Waits for a refresh of this account that is in progress, so its new token is revoked too.
+            await LockAccountAsync(userId, cancellationToken);
+            await RevokeActiveTokensAsync(db.RefreshTokens.Where(t => t.FamilyId == familyId),
+                RefreshTokenRevocationReasons.Logout, now, cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        return Result<bool>.Success(true);
+    }
+
+    // POST /api/auth/change-password (§6.3, §6.4, §6.5, D7, D9). Requires the current password. On success, in one
+    // transaction: the new password hash and a new security stamp (old access tokens stop working), the forced-change
+    // flags cleared, every refresh token of the user revoked, and a new session whose tokens are returned.
+    public async Task<Result<TokenResponse>> ChangePasswordAsync(ChangePasswordRequest request, CancellationToken cancellationToken)
+    {
+        var fieldErrors = await ValidateFieldsAsync(changePasswordValidator, request, cancellationToken);
+
+        // The account gate has just found this user; it is missing only if deleted in between.
+        var user = await userManager.FindByIdAsync(currentUser.UserId.ToString());
+        if (user is null)
+            return TokenRequestFailed(ErrorCodes.TokenInvalid, "A valid access token is required.");
+
+        if (!string.IsNullOrEmpty(request.NewPassword))
+        {
+            var policyErrors = await PasswordPolicyErrorsAsync(user, request.NewPassword);
+            if (policyErrors.Count > 0)
+            {
+                fieldErrors[nameof(ChangePasswordRequest.NewPassword)] =
+                    [.. fieldErrors.GetValueOrDefault(nameof(ChangePasswordRequest.NewPassword), []), .. policyErrors];
+            }
+        }
+
+        // An invalid request does not count as a failed password attempt.
+        if (fieldErrors.Count > 0)
+            return TokenRequestFailed(ErrorCodes.ValidationFailed, "One or more fields are invalid.", fieldErrors);
+
+        if (await userManager.IsLockedOutAsync(user))
+            return AccountLocked();
+
+        var now = clock.UtcNow;
+        if (AccountStateFailure(user, now) is { } accountFailure)
+            return accountFailure;
+
+        var role = await SingleRoleAsync(user);
+
+        GeneratedRefreshToken refreshToken;
+        await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+        {
+            // Verifies the current password, then saves the new hash and a new security stamp. This is the first write,
+            // so it also takes the account row lock: a refresh or login in progress finishes first and is revoked below.
+            var changed = await userManager.ChangePasswordAsync(user, request.CurrentPassword!, request.NewPassword!);
+            if (!changed.Succeeded)
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                return await ChangePasswordFailedAsync(user, changed);
+            }
+
+            user.MustChangePassword = false;
+            user.TemporaryPasswordExpiresAt = null;
+            user.PasswordChangedAt = now;
+            user.AccessFailedCount = 0;
+            var updated = await userManager.UpdateAsync(user);
+            if (!updated.Succeeded)
+                throw new InvalidOperationException($"Could not update the account: {string.Join(", ", updated.Errors.Select(e => e.Code))}");
+
+            // §6.3: a new security stamp always comes with revoking every session of the user.
+            await RevokeActiveTokensAsync(db.RefreshTokens.Where(t => t.UserId == user.Id),
+                RefreshTokenRevocationReasons.PasswordChanged, now, cancellationToken);
+
+            refreshToken = tokenService.CreateRefreshToken();
+            db.RefreshTokens.Add(new RefreshToken
+            {
+                UserId = user.Id,
+                TokenHash = refreshToken.Hash,
+                FamilyId = Guid.NewGuid(),
+                CreatedAt = now,
+                ExpiresAt = refreshToken.ExpiresAt,
+            });
+            await db.SaveChangesAsync(cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
         }
@@ -246,17 +382,10 @@ public sealed class AuthService(
             .GroupBy(e => e.PropertyName)
             .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).Distinct().ToArray());
 
-        // The §6.5 password policy as configured on Identity, so it is defined once for every password flow.
         if (!string.IsNullOrEmpty(request.Password))
         {
             var candidate = new ApplicationUser { UserName = request.Email?.Trim(), Email = request.Email?.Trim() };
-            var passwordErrors = new List<string>();
-            foreach (var passwordValidator in userManager.PasswordValidators)
-            {
-                var result = await passwordValidator.ValidateAsync(userManager, candidate, request.Password);
-                passwordErrors.AddRange(result.Errors.Select(e => e.Description));
-            }
-
+            var passwordErrors = await PasswordPolicyErrorsAsync(candidate, request.Password);
             if (passwordErrors.Count > 0)
                 errors[nameof(RegisterStudentRequest.Password)] = [.. passwordErrors];
         }
@@ -288,6 +417,63 @@ public sealed class AuthService(
     private string UnknownUserPasswordHash() =>
         _unknownUserPasswordHash ??= userManager.PasswordHasher.HashPassword(
             new ApplicationUser(), Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)));
+
+    // The §6.5 password policy as configured on Identity, so it is defined once for every password flow.
+    private async Task<List<string>> PasswordPolicyErrorsAsync(ApplicationUser user, string password)
+    {
+        var errors = new List<string>();
+        foreach (var passwordValidator in userManager.PasswordValidators)
+        {
+            var result = await passwordValidator.ValidateAsync(userManager, user, password);
+            errors.AddRange(result.Errors.Select(e => e.Description));
+        }
+
+        return errors;
+    }
+
+    // Takes the account row's update lock for the rest of the current transaction (a no-op update), optionally only
+    // if the account is still active with the given security stamp. False when that condition no longer holds.
+    private async Task<bool> LockAccountAsync(Guid userId, CancellationToken cancellationToken, string? expectedSecurityStamp = null)
+    {
+        var accounts = db.Users.Where(u => u.Id == userId);
+        if (expectedSecurityStamp is not null)
+            accounts = accounts.Where(u => u.SecurityStamp == expectedSecurityStamp && u.AccountStatus == AccountStatus.Active);
+
+        return await accounts.ExecuteUpdateAsync(
+            setters => setters.SetProperty(u => u.SecurityStamp, u => u.SecurityStamp), cancellationToken) == 1;
+    }
+
+    // Revokes the still-active tokens among the given ones. Already-revoked rows keep their original reason and
+    // replacement link, so a rotated token stays recognisable as one (D5).
+    private static Task<int> RevokeActiveTokensAsync(
+        IQueryable<RefreshToken> tokens, string reason, DateTimeOffset now, CancellationToken cancellationToken) =>
+        tokens.Where(t => t.RevokedAt == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(t => t.RevokedAt, now)
+                .SetProperty(t => t.RevokedReason, reason), cancellationToken);
+
+    // A failed ChangePasswordAsync (the transaction is already rolled back). A wrong current password counts toward
+    // lockout (D9) and is reported on currentPassword; a new password that Identity rejects is reported on newPassword.
+    private async Task<Result<TokenResponse>> ChangePasswordFailedAsync(ApplicationUser user, IdentityResult result)
+    {
+        if (result.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.PasswordMismatch)))
+        {
+            await userManager.AccessFailedAsync(user);
+            if (await userManager.IsLockedOutAsync(user))
+                return AccountLocked();
+
+            return TokenRequestFailed(ErrorCodes.ValidationFailed, "One or more fields are invalid.",
+                new Dictionary<string, string[]> { [nameof(ChangePasswordRequest.CurrentPassword)] = ["The current password is incorrect."] });
+        }
+
+        if (result.Errors.All(e => e.Code.StartsWith("Password", StringComparison.Ordinal)))
+        {
+            return TokenRequestFailed(ErrorCodes.ValidationFailed, "One or more fields are invalid.",
+                new Dictionary<string, string[]> { [nameof(ChangePasswordRequest.NewPassword)] = [.. result.Errors.Select(e => e.Description)] });
+        }
+
+        throw new InvalidOperationException($"Changing the password failed: {string.Join(", ", result.Errors.Select(e => e.Code))}");
+    }
 
     private static async Task<Dictionary<string, string[]>> ValidateFieldsAsync<T>(
         IValidator<T> fieldValidator, T request, CancellationToken cancellationToken) =>
@@ -339,11 +525,8 @@ public sealed class AuthService(
     // Not cancellable: a client that disconnects must not stop the revocation.
     private async Task<Result<TokenResponse>> RevokeFamilyAfterReuseAsync(RefreshToken presented, DateTimeOffset now)
     {
-        var revoked = await db.RefreshTokens
-            .Where(t => t.FamilyId == presented.FamilyId && t.RevokedAt == null)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(t => t.RevokedAt, now)
-                .SetProperty(t => t.RevokedReason, RefreshTokenRevocationReasons.ReuseDetected), CancellationToken.None);
+        var revoked = await RevokeActiveTokensAsync(db.RefreshTokens.Where(t => t.FamilyId == presented.FamilyId),
+            RefreshTokenRevocationReasons.ReuseDetected, now, CancellationToken.None);
 
         logger.LogWarning(
             "Refresh token reuse detected for user {UserId}, token family {FamilyId}; revoked {RevokedCount} active token(s).",
