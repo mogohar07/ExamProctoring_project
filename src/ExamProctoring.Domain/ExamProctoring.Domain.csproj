@@ -1,5 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- No project references. Phase 1 adds Microsoft.Extensions.Identity.Stores for ApplicationUser (§4.2). -->
+  <!-- No project references. The one package exception: IdentityUser<Guid> for ApplicationUser,
+       entity classes only, no EF Core (§4.2). -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Identity.Stores" />
+  </ItemGroup>
 
 </Project>
