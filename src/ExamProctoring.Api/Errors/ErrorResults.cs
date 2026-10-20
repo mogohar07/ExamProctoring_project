@@ -20,6 +20,7 @@ public static class ErrorResults
         [ErrorCodes.AccountLocked] = StatusCodes.Status401Unauthorized,
         [ErrorCodes.AccountDeactivated] = StatusCodes.Status403Forbidden,
         [ErrorCodes.TemporaryPasswordExpired] = StatusCodes.Status403Forbidden,
+        [ErrorCodes.RefreshTokenReused] = StatusCodes.Status401Unauthorized,
     };
 
     public static IActionResult ToProblem(this ControllerBase controller, AppError error)

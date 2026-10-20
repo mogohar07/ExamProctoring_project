@@ -6,9 +6,8 @@ using System.Text.Json;
 using ExamProctoring.Application.Common;
 using ExamProctoring.Domain.Users;
 using ExamProctoring.Infrastructure.Persistence;
-using Microsoft.AspNetCore.Hosting;
+using ExamProctoring.IntegrationTests.TestSupport;
 using Microsoft.AspNetCore.Http.Metadata;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -453,14 +452,4 @@ public sealed class LoginTests(ApiFactory factory)
 
     private static string Claim(JsonWebToken jwt, string type) => jwt.Claims.Single(c => c.Type == type).Value;
 
-    // The API on a real Kestrel server, against the same test database, with its own random signing key.
-    private sealed class KestrelApiFactory : WebApplicationFactory<Program>
-    {
-        protected override void ConfigureWebHost(IWebHostBuilder builder)
-        {
-            builder.UseEnvironment("Development");
-            builder.UseSetting("ConnectionStrings:Default", ApiFactory.TestConnectionString);
-            builder.UseSetting("Jwt:SigningKey", Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)));
-        }
-    }
 }

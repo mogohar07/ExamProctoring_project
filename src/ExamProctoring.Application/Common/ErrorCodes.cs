@@ -11,4 +11,5 @@ public static class ErrorCodes
     public const string AccountLocked = "account_locked";
     public const string AccountDeactivated = "account_deactivated";
     public const string TemporaryPasswordExpired = "temporary_password_expired";
+    public const string RefreshTokenReused = "refresh_token_reused";
 }

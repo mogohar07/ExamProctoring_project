@@ -4,18 +4,21 @@ using ExamProctoring.Domain.Users;
 using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace ExamProctoring.Application.Auth;
 
-// Authentication use cases (§4.3). So far: student sign-up, login and the caller's own account.
+// Authentication use cases (§4.3). So far: student sign-up, login, refresh and the caller's own account.
 public sealed class AuthService(
     UserManager<ApplicationUser> userManager,
     IAppDbContext db,
     IValidator<RegisterStudentRequest> validator,
     IValidator<LoginRequest> loginValidator,
+    IValidator<RefreshRequest> refreshValidator,
     ITokenService tokenService,
     IClock clock,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    ILogger<AuthService> logger)
 {
     // Hash of a random password, verified for unknown emails so that they take as long as a wrong password.
     // Created once per process with the configured hasher (same algorithm and iteration count).
@@ -25,11 +28,9 @@ public sealed class AuthService(
     // status is revealed only after a correct password.
     public async Task<Result<TokenResponse>> LoginAsync(LoginRequest request, CancellationToken cancellationToken)
     {
-        var fieldErrors = (await loginValidator.ValidateAsync(request, cancellationToken)).Errors
-            .GroupBy(e => e.PropertyName)
-            .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray());
+        var fieldErrors = await ValidateFieldsAsync(loginValidator, request, cancellationToken);
         if (fieldErrors.Count > 0)
-            return LoginFailed(ErrorCodes.ValidationFailed, "One or more fields are invalid.", fieldErrors);
+            return TokenRequestFailed(ErrorCodes.ValidationFailed, "One or more fields are invalid.", fieldErrors);
 
         var password = request.Password!;
         var user = await userManager.FindByEmailAsync(request.Email!.Trim());
@@ -51,23 +52,11 @@ public sealed class AuthService(
 
         await userManager.ResetAccessFailedCountAsync(user);
 
-        if (user.AccountStatus != AccountStatus.Active)
-            return LoginFailed(ErrorCodes.AccountDeactivated, "This account has been deactivated.");
-
         var now = clock.UtcNow;
+        if (AccountStateFailure(user, now) is { } accountFailure)
+            return accountFailure;
 
-        // D7: an expired temporary password cannot be used; an admin must issue a new one.
-        if (user.MustChangePassword && user.TemporaryPasswordExpiresAt <= now)
-        {
-            return LoginFailed(ErrorCodes.TemporaryPasswordExpired,
-                "The temporary password has expired. Ask an administrator for a new one.");
-        }
-
-        // Exactly one role per user (§2.2, unique index on AspNetUserRoles.UserId). Anything else is corrupt data.
-        var roles = await userManager.GetRolesAsync(user);
-        if (roles.Count != 1)
-            throw new InvalidOperationException($"User {user.Id} has {roles.Count} roles; exactly one is required.");
-        var role = roles[0];
+        var role = await SingleRoleAsync(user);
 
         // Every login starts its own session (token family, D3). Only the refresh token's hash is stored.
         var refreshToken = tokenService.CreateRefreshToken();
@@ -90,16 +79,82 @@ public sealed class AuthService(
             await transaction.CommitAsync(cancellationToken);
         }
 
-        var accessToken = tokenService.CreateAccessToken(user, role);
+        return Result<TokenResponse>.Success(CreateTokenResponse(user, role, refreshToken));
+    }
 
-        return Result<TokenResponse>.Success(new TokenResponse(
-            TokenResponse.BearerTokenType,
-            accessToken.Token,
-            accessToken.ExpiresAt,
-            refreshToken.Token,
-            refreshToken.ExpiresAt,
-            user.MustChangePassword,
-            new AuthUserResponse(user.Id, user.FullName, user.Email!, role)));
+    // POST /api/auth/refresh (§6.6). The refresh token is the credential. A valid token is rotated: it is revoked
+    // and replaced by a new one in the same family, valid for another Jwt:RefreshTokenDays (rolling).
+    // Replaying a token that was already rotated revokes the whole family (D4, D5); there is no grace period.
+    public async Task<Result<TokenResponse>> RefreshAsync(RefreshRequest request, CancellationToken cancellationToken)
+    {
+        var fieldErrors = await ValidateFieldsAsync(refreshValidator, request, cancellationToken);
+        if (fieldErrors.Count > 0)
+            return TokenRequestFailed(ErrorCodes.ValidationFailed, "One or more fields are invalid.", fieldErrors);
+
+        var now = clock.UtcNow;
+        var tokenHash = tokenService.HashRefreshToken(request.RefreshToken!);
+        var presented = await db.RefreshTokens.AsNoTracking()
+            .SingleOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
+        if (presented is null)
+            return RefreshTokenInvalid();
+
+        if (presented.RevokedAt is not null)
+        {
+            // ReplacedByTokenId, not the free-text reason, tells a rotated token from one revoked by logout or a
+            // password change: only a rotated token presented again is a replay.
+            return presented.ReplacedByTokenId is null
+                ? RefreshTokenInvalid()
+                : await RevokeFamilyAfterReuseAsync(presented, now);
+        }
+
+        if (presented.ExpiresAt <= now)
+            return RefreshTokenInvalid();
+
+        // Tokens are deleted with their user (cascade), so a missing user cannot normally happen.
+        var user = await userManager.FindByIdAsync(presented.UserId.ToString());
+        if (user is null)
+            return RefreshTokenInvalid();
+        if (AccountStateFailure(user, now) is { } accountFailure)
+            return accountFailure;
+
+        var role = await SingleRoleAsync(user);
+
+        var refreshToken = tokenService.CreateRefreshToken();
+        await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+        {
+            var replacement = new RefreshToken
+            {
+                UserId = user.Id,
+                TokenHash = refreshToken.Hash,
+                FamilyId = presented.FamilyId,
+                CreatedAt = now,
+                ExpiresAt = refreshToken.ExpiresAt,
+            };
+            db.RefreshTokens.Add(replacement);
+            await db.SaveChangesAsync(cancellationToken);
+
+            // The rotation itself: one conditional UPDATE that only succeeds while the presented token is still
+            // unrevoked. SQL Server re-checks the WHERE clause under the row lock, so of two concurrent requests
+            // (even on different API instances) exactly one updates the row; the other gets 0 rows.
+            var rotated = await db.RefreshTokens
+                .Where(t => t.Id == presented.Id && t.RevokedAt == null)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(t => t.RevokedAt, now)
+                    .SetProperty(t => t.RevokedReason, RefreshTokenRevocationReasons.Rotated)
+                    .SetProperty(t => t.ReplacedByTokenId, replacement.Id), cancellationToken);
+
+            if (rotated == 0)
+            {
+                // Another request rotated this token first, so it has been used twice: undo our replacement and
+                // treat it as a replay. Clients must send one refresh at a time per session (D4).
+                await transaction.RollbackAsync(CancellationToken.None);
+                return await RevokeFamilyAfterReuseAsync(presented, now);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        return Result<TokenResponse>.Success(CreateTokenResponse(user, role, refreshToken));
     }
 
     // GET /api/auth/me (§6.9). Read from the database by the token's subject; the role comes from the token,
@@ -234,14 +289,82 @@ public sealed class AuthService(
         _unknownUserPasswordHash ??= userManager.PasswordHasher.HashPassword(
             new ApplicationUser(), Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)));
 
+    private static async Task<Dictionary<string, string[]>> ValidateFieldsAsync<T>(
+        IValidator<T> fieldValidator, T request, CancellationToken cancellationToken) =>
+        (await fieldValidator.ValidateAsync(request, cancellationToken)).Errors
+            .GroupBy(e => e.PropertyName)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray());
+
+    // Account rules shared by login and refresh: the account must be Active (§6.6), and an expired temporary
+    // password cannot be used (D7); an admin must issue a new one. Null when the account may receive tokens.
+    private static Result<TokenResponse>? AccountStateFailure(ApplicationUser user, DateTimeOffset now)
+    {
+        if (user.AccountStatus != AccountStatus.Active)
+            return TokenRequestFailed(ErrorCodes.AccountDeactivated, "This account has been deactivated.");
+
+        if (user.MustChangePassword && user.TemporaryPasswordExpiresAt <= now)
+        {
+            return TokenRequestFailed(ErrorCodes.TemporaryPasswordExpired,
+                "The temporary password has expired. Ask an administrator for a new one.");
+        }
+
+        return null;
+    }
+
+    // Exactly one role per user (§2.2, unique index on AspNetUserRoles.UserId). Anything else is corrupt data.
+    private async Task<string> SingleRoleAsync(ApplicationUser user)
+    {
+        var roles = await userManager.GetRolesAsync(user);
+        return roles.Count == 1
+            ? roles[0]
+            : throw new InvalidOperationException($"User {user.Id} has {roles.Count} roles; exactly one is required.");
+    }
+
+    private TokenResponse CreateTokenResponse(ApplicationUser user, string role, GeneratedRefreshToken refreshToken)
+    {
+        var accessToken = tokenService.CreateAccessToken(user, role);
+
+        return new TokenResponse(
+            TokenResponse.BearerTokenType,
+            accessToken.Token,
+            accessToken.ExpiresAt,
+            refreshToken.Token,
+            refreshToken.ExpiresAt,
+            user.MustChangePassword,
+            new AuthUserResponse(user.Id, user.FullName, user.Email!, role));
+    }
+
+    // A rotated token was presented again: revoke every still-active token of its family, including the newest
+    // one, and log a warning (§6.6). Already-revoked rows keep their original reason and replacement link.
+    // Not cancellable: a client that disconnects must not stop the revocation.
+    private async Task<Result<TokenResponse>> RevokeFamilyAfterReuseAsync(RefreshToken presented, DateTimeOffset now)
+    {
+        var revoked = await db.RefreshTokens
+            .Where(t => t.FamilyId == presented.FamilyId && t.RevokedAt == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(t => t.RevokedAt, now)
+                .SetProperty(t => t.RevokedReason, RefreshTokenRevocationReasons.ReuseDetected), CancellationToken.None);
+
+        logger.LogWarning(
+            "Refresh token reuse detected for user {UserId}, token family {FamilyId}; revoked {RevokedCount} active token(s).",
+            presented.UserId, presented.FamilyId, revoked);
+
+        return TokenRequestFailed(ErrorCodes.RefreshTokenReused,
+            "This refresh token was already used. The session has been ended; please log in again.");
+    }
+
+    // The same answer for an unknown, malformed, expired or revoked refresh token.
+    private static Result<TokenResponse> RefreshTokenInvalid() =>
+        TokenRequestFailed(ErrorCodes.TokenInvalid, "The refresh token is invalid or has expired.");
+
     // The same answer for an unknown email and a wrong password.
     private static Result<TokenResponse> InvalidCredentials() =>
-        LoginFailed(ErrorCodes.InvalidCredentials, "The email or password is incorrect.");
+        TokenRequestFailed(ErrorCodes.InvalidCredentials, "The email or password is incorrect.");
 
     private static Result<TokenResponse> AccountLocked() =>
-        LoginFailed(ErrorCodes.AccountLocked, "This account is temporarily locked after too many failed attempts. Try again later.");
+        TokenRequestFailed(ErrorCodes.AccountLocked, "This account is temporarily locked after too many failed attempts. Try again later.");
 
-    private static Result<TokenResponse> LoginFailed(
+    private static Result<TokenResponse> TokenRequestFailed(
         string code, string message, IReadOnlyDictionary<string, string[]>? fieldErrors = null) =>
         Result<TokenResponse>.Failure(new AppError(code, message, fieldErrors));
 }

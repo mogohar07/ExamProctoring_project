@@ -1,7 +1,9 @@
 using System.Net;
 using System.Security.Cryptography;
+using ExamProctoring.Application.Abstractions;
 using ExamProctoring.Infrastructure;
 using ExamProctoring.Infrastructure.Persistence;
+using ExamProctoring.IntegrationTests.TestSupport;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -27,6 +29,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     // for token creation and validation within the run. It replaces the developer's User Secrets key.
     private static readonly string TestSigningKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
 
+    // The API's clock for this test host. Tests can freeze it or move it forward for expiry checks.
+    public TestClock Clock { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
@@ -36,7 +41,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
         // Test-only endpoints (TestSupport/AuthorizationProbeController) that exercise the authorization policies.
         // They exist only in this test host, never in the API itself.
-        builder.ConfigureTestServices(services => services.AddControllers().AddApplicationPart(typeof(ApiFactory).Assembly));
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddControllers().AddApplicationPart(typeof(ApiFactory).Assembly);
+
+            // The real time unless a test freezes or advances it (TestSupport/TestClock).
+            services.AddSingleton<IClock>(Clock);
+        });
     }
 
     public async ValueTask InitializeAsync()
