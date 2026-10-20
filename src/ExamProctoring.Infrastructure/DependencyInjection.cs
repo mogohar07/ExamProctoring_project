@@ -1,4 +1,7 @@
+using ExamProctoring.Domain.Users;
+using ExamProctoring.Infrastructure.Identity;
 using ExamProctoring.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,6 +29,12 @@ public static class DependencyInjection
 
             options.UseSqlServer(connectionString, sql => sql.UseCompatibilityLevel(SqlServerCompatibilityLevel));
         });
+
+        // AddIdentityCore, not AddIdentity: no cookie schemes; the API uses JWT bearer tokens (§4.6).
+        services.AddIdentityCore<ApplicationUser>(IdentityConfiguration.Configure)
+            .AddRoles<IdentityRole<Guid>>()
+            .AddEntityFrameworkStores<AppDbContext>()
+            .AddSignInManager();
 
         services.AddHealthChecks()
             .AddDbContextCheck<AppDbContext>("database");

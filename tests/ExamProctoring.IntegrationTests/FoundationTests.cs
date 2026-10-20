@@ -3,7 +3,8 @@ using System.Text.Json;
 
 namespace ExamProctoring.IntegrationTests;
 
-public sealed class FoundationTests(ApiFactory factory) : IClassFixture<ApiFactory>
+[Collection(ApiCollection.Name)]
+public sealed class FoundationTests(ApiFactory factory)
 {
     private readonly HttpClient _client = factory.CreateClient();
 
