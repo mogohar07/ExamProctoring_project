@@ -4,4 +4,10 @@
     <ProjectReference Include="..\ExamProctoring.Domain\ExamProctoring.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- IAppDbContext (DbSet, transactions) and request validation (section 4.5). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+  </ItemGroup>
+
 </Project>
