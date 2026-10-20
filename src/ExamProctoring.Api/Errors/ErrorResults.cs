@@ -16,6 +16,10 @@ public static class ErrorResults
         [ErrorCodes.ValidationFailed] = StatusCodes.Status400BadRequest,
         [ErrorCodes.DuplicateAccount] = StatusCodes.Status409Conflict,
         [ErrorCodes.TokenInvalid] = StatusCodes.Status401Unauthorized,
+        [ErrorCodes.InvalidCredentials] = StatusCodes.Status401Unauthorized,
+        [ErrorCodes.AccountLocked] = StatusCodes.Status401Unauthorized,
+        [ErrorCodes.AccountDeactivated] = StatusCodes.Status403Forbidden,
+        [ErrorCodes.TemporaryPasswordExpired] = StatusCodes.Status403Forbidden,
     };
 
     public static IActionResult ToProblem(this ControllerBase controller, AppError error)

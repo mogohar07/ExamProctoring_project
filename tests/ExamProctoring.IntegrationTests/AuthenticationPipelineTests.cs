@@ -247,7 +247,7 @@ public sealed class AuthenticationPipelineTests(ApiFactory factory)
     }
 
     [Fact]
-    public void AnonymousEndpoints_AreExactlyRegisterHealthAndOpenApi()
+    public void AnonymousEndpoints_AreExactlyTheDocumentedOnes()
     {
         var anonymous = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
@@ -255,7 +255,8 @@ public sealed class AuthenticationPipelineTests(ApiFactory factory)
             .Select(e => e.RoutePattern.RawText!.TrimStart('/'))
             .Order();
 
-        Assert.Equal(new[] { "api/auth/register", "health", "openapi/{documentName}.json" }, anonymous);
+        // §6.7: register, login, refresh (added in Step 4d) and the health check, plus the Development OpenAPI document.
+        Assert.Equal(new[] { "api/auth/login", "api/auth/register", "health", "openapi/{documentName}.json" }, anonymous);
     }
 
     [Fact]
