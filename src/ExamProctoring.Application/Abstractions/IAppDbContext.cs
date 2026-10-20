@@ -9,6 +9,8 @@ public interface IAppDbContext
 {
     DbSet<ApplicationUser> Users { get; }
 
+    DbSet<RefreshToken> RefreshTokens { get; }
+
     // For explicit transactions that span several saves (for example user + role at sign-up, §6.4).
     DatabaseFacade Database { get; }
 

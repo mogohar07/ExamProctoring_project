@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Cryptography;
 using ExamProctoring.Infrastructure;
 using ExamProctoring.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Builder;
@@ -17,14 +18,19 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public const string ClientIpHeader = "X-Test-Client-IP";
 
     // Local Windows authentication, no password. Override with EXAMPROCTORING_TEST_CONNECTION if needed.
-    private static readonly string TestConnectionString =
+    internal static readonly string TestConnectionString =
         Environment.GetEnvironmentVariable("EXAMPROCTORING_TEST_CONNECTION")
         ?? "Server=localhost;Database=ExamProctoring_Tests;Trusted_Connection=True;TrustServerCertificate=True";
+
+    // A random JWT signing key for this test run: no key in source or configuration files, and the same key
+    // for token creation and validation within the run. It replaces the developer's User Secrets key.
+    private static readonly string TestSigningKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
         builder.UseSetting("ConnectionStrings:Default", TestConnectionString);
+        builder.UseSetting("Jwt:SigningKey", TestSigningKey);
         builder.ConfigureServices(services => services.AddSingleton<IStartupFilter, TestClientIpStartupFilter>());
     }
 

@@ -2,8 +2,10 @@ using ExamProctoring.Api.Errors;
 using ExamProctoring.Api.Middleware;
 using ExamProctoring.Api.RateLimiting;
 using ExamProctoring.Application;
+using ExamProctoring.Application.Common;
 using ExamProctoring.Infrastructure;
 using ExamProctoring.Infrastructure.Persistence;
+using Microsoft.Extensions.Options;
 
 const string WebExamCorsPolicy = "WebExamApp";
 
@@ -35,6 +37,10 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure();
 
 var app = builder.Build();
+
+// Fail fast, before touching the database, if the Jwt settings are missing or invalid (§6.8, D12).
+// The error lists what is wrong without ever including the signing key.
+_ = app.Services.GetRequiredService<IOptions<JwtOptions>>().Value;
 
 // Roles must exist before the first sign-up (§6.8). Needs the migrations applied first; they are never applied here.
 await using (var scope = app.Services.CreateAsyncScope())

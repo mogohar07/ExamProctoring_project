@@ -1,4 +1,5 @@
 using ExamProctoring.Application.Abstractions;
+using ExamProctoring.Application.Common;
 using ExamProctoring.Domain.Users;
 using ExamProctoring.Infrastructure.Identity;
 using ExamProctoring.Infrastructure.Persistence;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace ExamProctoring.Infrastructure;
 
@@ -40,6 +42,11 @@ public static class DependencyInjection
 
         services.AddSingleton<IClock, SystemClock>();
         services.AddScoped<DataSeeder>();
+
+        // JWT settings (§6.8): bound from "Jwt", validated before the API starts (Program.cs) and again on start.
+        services.AddOptions<JwtOptions>().BindConfiguration(JwtOptions.SectionName).ValidateOnStart();
+        services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
+        services.AddSingleton<ITokenService, JwtTokenService>();
 
         services.AddHealthChecks()
             .AddDbContextCheck<AppDbContext>("database");
