@@ -1,0 +1,7 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ExamProctoring.Domain\ExamProctoring.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

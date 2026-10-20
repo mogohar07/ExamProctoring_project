@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <!-- Points to %APPDATA%\Microsoft\UserSecrets\<id>\secrets.json, outside the repository. -->
+    <UserSecretsId>042a3bf0-64c8-43e0-a494-0021f8580889</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ExamProctoring.Application\ExamProctoring.Application.csproj" />
+    <ProjectReference Include="..\ExamProctoring.Infrastructure\ExamProctoring.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
+    <!-- Migrations tooling must be referenced by the startup project (§4.5); never shipped. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

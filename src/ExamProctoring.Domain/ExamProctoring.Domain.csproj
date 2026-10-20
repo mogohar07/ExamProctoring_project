@@ -1,0 +1,5 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- No project references. Phase 1 adds Microsoft.Extensions.Identity.Stores for ApplicationUser (§4.2). -->
+
+</Project>
