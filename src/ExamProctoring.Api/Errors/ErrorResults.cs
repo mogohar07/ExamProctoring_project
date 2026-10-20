@@ -15,6 +15,7 @@ public static class ErrorResults
     {
         [ErrorCodes.ValidationFailed] = StatusCodes.Status400BadRequest,
         [ErrorCodes.DuplicateAccount] = StatusCodes.Status409Conflict,
+        [ErrorCodes.TokenInvalid] = StatusCodes.Status401Unauthorized,
     };
 
     public static IActionResult ToProblem(this ControllerBase controller, AppError error)

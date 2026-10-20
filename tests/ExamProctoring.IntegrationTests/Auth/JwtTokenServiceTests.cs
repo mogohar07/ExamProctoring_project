@@ -2,10 +2,10 @@ using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
-using ExamProctoring.Application.Abstractions;
 using ExamProctoring.Application.Common;
 using ExamProctoring.Domain.Users;
 using ExamProctoring.Infrastructure.Identity;
+using ExamProctoring.IntegrationTests.TestSupport;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -272,9 +272,4 @@ public sealed partial class JwtTokenServiceTests
 
     [GeneratedRegex("^[0-9a-f]{64}$")]
     private static partial Regex LowercaseHex64();
-
-    private sealed class FixedClock(DateTimeOffset now) : IClock
-    {
-        public DateTimeOffset UtcNow => now;
-    }
 }

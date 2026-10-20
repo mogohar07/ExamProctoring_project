@@ -1,3 +1,4 @@
+using ExamProctoring.Api.Authorization;
 using ExamProctoring.Api.Errors;
 using ExamProctoring.Api.Middleware;
 using ExamProctoring.Api.RateLimiting;
@@ -29,9 +30,9 @@ builder.Services.AddCors(options => options.AddPolicy(WebExamCorsPolicy, policy 
 // Per-IP limits on the anonymous auth endpoints (§6.7).
 builder.Services.AddApiRateLimiting();
 
-// Placeholders: Phase 1 adds the JWT bearer scheme, role policies and the fallback policy (§6).
-builder.Services.AddAuthentication();
-builder.Services.AddAuthorization();
+// JWT bearer authentication with the per-request account gate; fallback, default and role policies (§6.1, §6.7).
+builder.Services.AddApiAuthentication();
+builder.Services.AddApiAuthorization();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure();
@@ -53,7 +54,8 @@ app.UseStatusCodePages();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    // Anonymous, or the fallback policy would require a token for the document.
+    app.MapOpenApi().AllowAnonymous();
     app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "ExamProctoring API v1"));
 }
 else

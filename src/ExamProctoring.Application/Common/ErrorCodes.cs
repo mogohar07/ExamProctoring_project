@@ -5,4 +5,6 @@ public static class ErrorCodes
 {
     public const string ValidationFailed = "validation_failed";
     public const string DuplicateAccount = "duplicate_account";
+    public const string TokenInvalid = "token_invalid";
+    public const string PasswordChangeRequired = "password_change_required";
 }

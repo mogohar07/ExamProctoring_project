@@ -7,13 +7,32 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ExamProctoring.Application.Auth;
 
-// Authentication use cases (§4.3). So far: student sign-up only.
+// Authentication use cases (§4.3). So far: student sign-up and the caller's own account.
 public sealed class AuthService(
     UserManager<ApplicationUser> userManager,
     IAppDbContext db,
     IValidator<RegisterStudentRequest> validator,
-    IClock clock)
+    IClock clock,
+    ICurrentUser currentUser)
 {
+    // GET /api/auth/me (§6.9). Read from the database by the token's subject; the role comes from the token,
+    // since a user's single role is fixed when the account is created (§2.2).
+    public async Task<Result<MeResponse>> GetMeAsync(CancellationToken cancellationToken)
+    {
+        var userId = currentUser.UserId;
+        var role = currentUser.Role;
+
+        var me = await db.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new MeResponse(u.Id, u.FullName, u.Email!, role, u.MustChangePassword))
+            .SingleOrDefaultAsync(cancellationToken);
+
+        // The account gate has just found this user; this only happens if the account was deleted in between.
+        return me is null
+            ? Result<MeResponse>.Failure(new AppError(ErrorCodes.TokenInvalid, "A valid access token is required."))
+            : Result<MeResponse>.Success(me);
+    }
+
     // §6.4. Creates an Active Student, or returns validation_failed / duplicate_account.
     public async Task<Result<RegisterStudentResponse>> RegisterStudentAsync(
         RegisterStudentRequest request, CancellationToken cancellationToken)

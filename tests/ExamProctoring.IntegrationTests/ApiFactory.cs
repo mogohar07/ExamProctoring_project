@@ -5,6 +5,7 @@ using ExamProctoring.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -32,6 +33,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("ConnectionStrings:Default", TestConnectionString);
         builder.UseSetting("Jwt:SigningKey", TestSigningKey);
         builder.ConfigureServices(services => services.AddSingleton<IStartupFilter, TestClientIpStartupFilter>());
+
+        // Test-only endpoints (TestSupport/AuthorizationProbeController) that exercise the authorization policies.
+        // They exist only in this test host, never in the API itself.
+        builder.ConfigureTestServices(services => services.AddControllers().AddApplicationPart(typeof(ApiFactory).Assembly));
     }
 
     public async ValueTask InitializeAsync()
