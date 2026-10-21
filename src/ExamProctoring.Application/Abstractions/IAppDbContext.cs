@@ -1,3 +1,4 @@
+using ExamProctoring.Domain.Exams;
 using ExamProctoring.Domain.Users;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,13 @@ public interface IAppDbContext
     DbSet<IdentityUserRole<Guid>> UserRoles { get; }
 
     DbSet<RefreshToken> RefreshTokens { get; }
+
+    // Exams and their questions (§5.2).
+    DbSet<Exam> Exams { get; }
+
+    DbSet<Question> Questions { get; }
+
+    DbSet<QuestionOption> QuestionOptions { get; }
 
     // For explicit transactions that span several saves (for example user + role at sign-up, §6.4).
     DatabaseFacade Database { get; }

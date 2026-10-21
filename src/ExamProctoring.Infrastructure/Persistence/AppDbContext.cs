@@ -1,4 +1,5 @@
 using ExamProctoring.Application.Abstractions;
+using ExamProctoring.Domain.Exams;
 using ExamProctoring.Domain.Users;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -11,6 +12,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options), IAppDbContext
 {
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
+    public DbSet<Exam> Exams => Set<Exam>();
+
+    public DbSet<Question> Questions => Set<Question>();
+
+    public DbSet<QuestionOption> QuestionOptions => Set<QuestionOption>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
