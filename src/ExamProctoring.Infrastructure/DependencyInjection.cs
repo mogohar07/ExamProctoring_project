@@ -42,6 +42,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IClock, SystemClock>();
         services.AddScoped<DataSeeder>();
+        services.AddOptions<AdminSeedOptions>().BindConfiguration(AdminSeedOptions.SectionName);
 
         // JWT settings (§6.8): bound from "Jwt", validated before the API starts (Program.cs) and again on start.
         services.AddOptions<JwtOptions>().BindConfiguration(JwtOptions.SectionName).ValidateOnStart();

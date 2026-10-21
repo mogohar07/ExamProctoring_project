@@ -1,4 +1,5 @@
 using ExamProctoring.Application.Abstractions;
+using ExamProctoring.Application.Accounts;
 using ExamProctoring.Application.Common;
 using ExamProctoring.Domain.Users;
 using FluentValidation;
@@ -23,6 +24,7 @@ public sealed class AuthService(
     IValidator<LogoutRequest> logoutValidator,
     IValidator<ChangePasswordRequest> changePasswordValidator,
     ITokenService tokenService,
+    AccountSessions sessions,
     IClock clock,
     ICurrentUser currentUser,
     ILogger<AuthService> logger)
@@ -137,7 +139,7 @@ public sealed class AuthService(
         var refreshToken = tokenService.CreateRefreshToken();
         await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
         {
-            if (!await LockAccountAsync(user.Id, cancellationToken, expectedSecurityStamp: user.SecurityStamp))
+            if (!await sessions.LockAccountAsync(user.Id, cancellationToken, expectedSecurityStamp: user.SecurityStamp))
             {
                 // A password change (or deactivation) committed after the checks above: the session is over.
                 await transaction.RollbackAsync(CancellationToken.None);
@@ -207,9 +209,8 @@ public sealed class AuthService(
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
             // Waits for a refresh of this account that is in progress, so its new token is revoked too.
-            await LockAccountAsync(userId, cancellationToken);
-            await RevokeActiveTokensAsync(db.RefreshTokens.Where(t => t.FamilyId == familyId),
-                RefreshTokenRevocationReasons.Logout, now, cancellationToken);
+            await sessions.LockAccountAsync(userId, cancellationToken);
+            await sessions.RevokeFamilyAsync(familyId.Value, RefreshTokenRevocationReasons.Logout, now, cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
         }
@@ -273,8 +274,7 @@ public sealed class AuthService(
                 throw new InvalidOperationException($"Could not update the account: {string.Join(", ", updated.Errors.Select(e => e.Code))}");
 
             // §6.3: a new security stamp always comes with revoking every session of the user.
-            await RevokeActiveTokensAsync(db.RefreshTokens.Where(t => t.UserId == user.Id),
-                RefreshTokenRevocationReasons.PasswordChanged, now, cancellationToken);
+            await sessions.RevokeAllForUserAsync(user.Id, RefreshTokenRevocationReasons.PasswordChanged, now, cancellationToken);
 
             refreshToken = tokenService.CreateRefreshToken();
             db.RefreshTokens.Add(new RefreshToken
@@ -431,27 +431,6 @@ public sealed class AuthService(
         return errors;
     }
 
-    // Takes the account row's update lock for the rest of the current transaction (a no-op update), optionally only
-    // if the account is still active with the given security stamp. False when that condition no longer holds.
-    private async Task<bool> LockAccountAsync(Guid userId, CancellationToken cancellationToken, string? expectedSecurityStamp = null)
-    {
-        var accounts = db.Users.Where(u => u.Id == userId);
-        if (expectedSecurityStamp is not null)
-            accounts = accounts.Where(u => u.SecurityStamp == expectedSecurityStamp && u.AccountStatus == AccountStatus.Active);
-
-        return await accounts.ExecuteUpdateAsync(
-            setters => setters.SetProperty(u => u.SecurityStamp, u => u.SecurityStamp), cancellationToken) == 1;
-    }
-
-    // Revokes the still-active tokens among the given ones. Already-revoked rows keep their original reason and
-    // replacement link, so a rotated token stays recognisable as one (D5).
-    private static Task<int> RevokeActiveTokensAsync(
-        IQueryable<RefreshToken> tokens, string reason, DateTimeOffset now, CancellationToken cancellationToken) =>
-        tokens.Where(t => t.RevokedAt == null)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(t => t.RevokedAt, now)
-                .SetProperty(t => t.RevokedReason, reason), cancellationToken);
-
     // A failed ChangePasswordAsync (the transaction is already rolled back). A wrong current password counts toward
     // lockout (D9) and is reported on currentPassword; a new password that Identity rejects is reported on newPassword.
     private async Task<Result<TokenResponse>> ChangePasswordFailedAsync(ApplicationUser user, IdentityResult result)
@@ -525,7 +504,7 @@ public sealed class AuthService(
     // Not cancellable: a client that disconnects must not stop the revocation.
     private async Task<Result<TokenResponse>> RevokeFamilyAfterReuseAsync(RefreshToken presented, DateTimeOffset now)
     {
-        var revoked = await RevokeActiveTokensAsync(db.RefreshTokens.Where(t => t.FamilyId == presented.FamilyId),
+        var revoked = await sessions.RevokeFamilyAsync(presented.FamilyId,
             RefreshTokenRevocationReasons.ReuseDetected, now, CancellationToken.None);
 
         logger.LogWarning(

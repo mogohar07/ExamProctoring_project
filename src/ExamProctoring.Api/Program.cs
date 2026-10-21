@@ -43,7 +43,8 @@ var app = builder.Build();
 // The error lists what is wrong without ever including the signing key.
 _ = app.Services.GetRequiredService<IOptions<JwtOptions>>().Value;
 
-// Roles must exist before the first sign-up (§6.8). Needs the migrations applied first; they are never applied here.
+// Roles and the first admin (§6.8, D20). Fails startup if no admin exists and the Seed settings are missing or invalid.
+// Needs the migrations applied first; they are never applied here.
 await using (var scope = app.Services.CreateAsyncScope())
 {
     await scope.ServiceProvider.GetRequiredService<DataSeeder>().SeedAsync();

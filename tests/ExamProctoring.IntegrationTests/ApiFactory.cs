@@ -29,6 +29,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     // for token creation and validation within the run. It replaces the developer's User Secrets key.
     private static readonly string TestSigningKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
 
+    // The first admin seeded at startup (D20): a random password for this test run, nothing in source or configuration.
+    internal const string SeedAdminEmail = "seed.admin@examproctoring.test";
+    internal static readonly string SeedAdminPassword = "Aa1" + Convert.ToBase64String(RandomNumberGenerator.GetBytes(18));
+
     // The API's clock for this test host. Tests can freeze it or move it forward for expiry checks.
     public TestClock Clock { get; } = new();
 
@@ -37,6 +41,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseEnvironment("Development");
         builder.UseSetting("ConnectionStrings:Default", TestConnectionString);
         builder.UseSetting("Jwt:SigningKey", TestSigningKey);
+        builder.UseSetting("Seed:AdminEmail", SeedAdminEmail);
+        builder.UseSetting("Seed:AdminPassword", SeedAdminPassword);
         builder.ConfigureServices(services => services.AddSingleton<IStartupFilter, TestClientIpStartupFilter>());
 
         // Test-only endpoints (TestSupport/AuthorizationProbeController) that exercise the authorization policies.

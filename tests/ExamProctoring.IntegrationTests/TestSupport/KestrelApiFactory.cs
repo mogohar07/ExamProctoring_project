@@ -14,5 +14,7 @@ public sealed class KestrelApiFactory : WebApplicationFactory<Program>
         builder.UseEnvironment("Development");
         builder.UseSetting("ConnectionStrings:Default", ApiFactory.TestConnectionString);
         builder.UseSetting("Jwt:SigningKey", Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)));
+        builder.UseSetting("Seed:AdminEmail", ApiFactory.SeedAdminEmail);
+        builder.UseSetting("Seed:AdminPassword", ApiFactory.SeedAdminPassword);
     }
 }

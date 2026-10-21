@@ -252,8 +252,8 @@ public sealed class StudentSignUpTests(ApiFactory factory)
     public async Task RoleSeeding_CreatesTheThreeRoles_AndCanRunAgain()
     {
         await using var scope = factory.Services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<DataSeeder>().SeedAsync();
-        await scope.ServiceProvider.GetRequiredService<DataSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<DataSeeder>().SeedAsync(Ct);
+        await scope.ServiceProvider.GetRequiredService<DataSeeder>().SeedAsync(Ct);
 
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var roles = await db.Roles.Select(r => r.Name).OrderBy(n => n).ToListAsync(Ct);
