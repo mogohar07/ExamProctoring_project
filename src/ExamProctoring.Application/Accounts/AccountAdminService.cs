@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using ExamProctoring.Application.Abstractions;
 using ExamProctoring.Application.Common;
 using ExamProctoring.Domain.Users;
@@ -10,8 +11,8 @@ using Microsoft.Extensions.Options;
 namespace ExamProctoring.Application.Accounts;
 
 // Account administration by admins (§4.3, §6.4, §6.9, D18-D24). Admin endpoints manage only Students and
-// Instructors; they never create or manage Admin accounts (D21). So far: instructor creation, temporary passwords,
-// deactivation and reactivation.
+// Instructors; they never create or manage Admin accounts (D21): instructor creation, temporary passwords,
+// deactivation, reactivation, and the account list and detail.
 public sealed class AccountAdminService(
     UserManager<ApplicationUser> userManager,
     IAppDbContext db,
@@ -19,6 +20,7 @@ public sealed class AccountAdminService(
     IValidator<CreateInstructorRequest> createInstructorValidator,
     IValidator<DeactivateAccountRequest> deactivateValidator,
     IValidator<ReactivateAccountRequest> reactivateValidator,
+    IValidator<AccountListQuery> listValidator,
     IOptions<AuthOptions> authOptions,
     IClock clock,
     ICurrentUser currentUser,
@@ -201,6 +203,96 @@ public sealed class AccountAdminService(
         logger.LogInformation("Admin {AdminId} set account {AccountId} to {AccountStatus}.", currentUser.UserId, account.Id, newStatus);
 
         return Result<bool>.Success(true);
+    }
+
+    // GET /api/admin/accounts (§6.9, D23). Students and Instructors only, newest first, one page at a time. Invalid
+    // parameters are rejected (400), never adjusted. Only the D23 fields are read and returned.
+    public async Task<Result<AccountListResponse>> ListAccountsAsync(AccountListQuery query, CancellationToken cancellationToken)
+    {
+        if (await ValidationFailedAsync(listValidator, query, cancellationToken) is { } invalid)
+            return Result<AccountListResponse>.Failure(invalid);
+
+        var page = query.Page ?? 1;
+        var pageSize = query.PageSize ?? AccountListQuery.DefaultPageSize;
+
+        var accounts = ManagedAccounts();
+        if (query.Role is not null)
+        {
+            var role = AccountListQuery.ParseRole(query.Role);
+            accounts = accounts.Where(a => a.Role == role);
+        }
+
+        if (query.Status is not null)
+        {
+            var status = AccountListQuery.ParseStatus(query.Status);
+            accounts = accounts.Where(a => a.User.AccountStatus == status);
+        }
+
+        var totalCount = await accounts.CountAsync(cancellationToken);
+
+        // A page that starts beyond the last account is empty; so is one too far out to compute an offset for.
+        var skip = (long)(page - 1) * pageSize;
+        IReadOnlyList<AccountSummaryResponse> items = skip >= totalCount
+            ? []
+            : await accounts
+                // Newest first; the id breaks ties so that pages never overlap or skip an account.
+                .OrderByDescending(a => a.User.CreatedAt)
+                .ThenByDescending(a => a.User.Id)
+                .Skip((int)skip)
+                .Take(pageSize)
+                .Select(ToSummary(clock.UtcNow))
+                .ToListAsync(cancellationToken);
+
+        return Result<AccountListResponse>.Success(new AccountListResponse(items, page, pageSize, totalCount));
+    }
+
+    // GET /api/admin/accounts/{id} (§6.9, D21, D23). The same fields as a list item. An Admin account, the caller's own
+    // account, an unknown id and an id that is not a Guid are all 404 account_not_found.
+    public async Task<Result<AccountSummaryResponse>> GetAccountAsync(string accountId, CancellationToken cancellationToken)
+    {
+        if (!TryParseManagedAccountId(accountId, out var targetId))
+            return Result<AccountSummaryResponse>.Failure(AccountNotFound());
+
+        var account = await ManagedAccounts()
+            .Where(a => a.User.Id == targetId)
+            .Select(ToSummary(clock.UtcNow))
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return account is null
+            ? Result<AccountSummaryResponse>.Failure(AccountNotFound())
+            : Result<AccountSummaryResponse>.Success(account);
+    }
+
+    // Every Student and Instructor account with its role (each account has exactly one role, §2.2). Admin accounts are
+    // never included (D21), so neither is the calling admin. Read-only.
+    private IQueryable<ManagedAccount> ManagedAccounts() =>
+        from user in db.Users.AsNoTracking()
+        join userRole in db.UserRoles on user.Id equals userRole.UserId
+        join role in db.Roles on userRole.RoleId equals role.Id
+        where role.Name == RoleNames.Student || role.Name == RoleNames.Instructor
+        select new ManagedAccount { User = user, Role = role.Name! };
+
+    // Reads only the D23 fields. Locked out uses Identity's rule: lockout enabled and the lockout end not yet passed.
+    private static Expression<Func<ManagedAccount, AccountSummaryResponse>> ToSummary(DateTimeOffset now) =>
+        a => new AccountSummaryResponse(
+            a.User.Id,
+            a.User.FullName,
+            a.User.Email!,
+            a.Role,
+            a.User.AccountStatus.ToString(),
+            a.User.MustChangePassword,
+            a.User.TemporaryPasswordExpiresAt,
+            a.User.LockoutEnabled && a.User.LockoutEnd != null && a.User.LockoutEnd > now,
+            a.User.CreatedAt,
+            a.User.LastLoginAt,
+            a.User.StatusChangedAt,
+            a.User.StatusReason);
+
+    private sealed class ManagedAccount
+    {
+        public required ApplicationUser User { get; init; }
+
+        public required string Role { get; init; }
     }
 
     // D21: the caller's own account and an id that is not a Guid are answered like an unknown account.

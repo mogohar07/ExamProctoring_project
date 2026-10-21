@@ -7,13 +7,40 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace ExamProctoring.Api.Controllers;
 
-// Account administration (§6.9). Admins only; Admin accounts are never created or managed here (D21).
-// So far: instructor creation, temporary passwords, deactivation and reactivation.
+// Account administration (§6.9). Admins only; Admin accounts are never created, listed or managed here (D21).
 [ApiController]
 [Route("api/admin")]
 [Authorize(Policy = AuthorizationPolicies.AdminOnly)]
 public sealed class AdminAccountsController(AccountAdminService accountAdminService) : ControllerBase
 {
+    // §6.9, D23. Lists other people's accounts, so the response is marked not cacheable.
+    [HttpGet("accounts")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType<AccountListResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")]
+    public async Task<IActionResult> ListAccounts([FromQuery] AccountListQuery query, CancellationToken cancellationToken)
+    {
+        var result = await accountAdminService.ListAccountsAsync(query, cancellationToken);
+
+        return result.IsSuccess ? Ok(result.Value) : this.ToProblem(result.Error!);
+    }
+
+    // §6.9, D21, D23. Same fields as a list item; marked not cacheable.
+    [HttpGet("accounts/{id}")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType<AccountSummaryResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    public async Task<IActionResult> GetAccount(string id, CancellationToken cancellationToken)
+    {
+        var result = await accountAdminService.GetAccountAsync(id, cancellationToken);
+
+        return result.IsSuccess ? Ok(result.Value) : this.ToProblem(result.Error!);
+    }
+
     // §6.4, D18. The 201 response is the only time the temporary password is shown; it is marked not cacheable.
     [HttpPost("instructors")]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
