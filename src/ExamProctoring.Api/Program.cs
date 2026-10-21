@@ -42,6 +42,7 @@ var app = builder.Build();
 // Fail fast, before touching the database, if the Jwt settings are missing or invalid (§6.8, D12).
 // The error lists what is wrong without ever including the signing key.
 _ = app.Services.GetRequiredService<IOptions<JwtOptions>>().Value;
+_ = app.Services.GetRequiredService<IOptions<AuthOptions>>().Value;
 
 // Roles and the first admin (§6.8, D20). Fails startup if no admin exists and the Seed settings are missing or invalid.
 // Needs the migrations applied first; they are never applied here.

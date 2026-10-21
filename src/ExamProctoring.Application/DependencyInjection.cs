@@ -11,6 +11,7 @@ public static class DependencyInjection
     {
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
         services.AddScoped<AccountSessions>();
+        services.AddScoped<AccountAdminService>();
         services.AddScoped<AuthService>();
 
         return services;

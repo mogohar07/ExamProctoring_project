@@ -44,6 +44,11 @@ public static class DependencyInjection
         services.AddScoped<DataSeeder>();
         services.AddOptions<AdminSeedOptions>().BindConfiguration(AdminSeedOptions.SectionName);
 
+        // Account settings (§6.8, D18): validated before the API starts (Program.cs) and again on start.
+        services.AddOptions<AuthOptions>().BindConfiguration(AuthOptions.SectionName)
+            .Validate(options => options.TemporaryPasswordHours > 0, "Auth:TemporaryPasswordHours must be greater than 0.")
+            .ValidateOnStart();
+
         // JWT settings (§6.8): bound from "Jwt", validated before the API starts (Program.cs) and again on start.
         services.AddOptions<JwtOptions>().BindConfiguration(JwtOptions.SectionName).ValidateOnStart();
         services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
