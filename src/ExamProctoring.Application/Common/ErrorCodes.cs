@@ -12,4 +12,6 @@ public static class ErrorCodes
     public const string AccountDeactivated = "account_deactivated";
     public const string TemporaryPasswordExpired = "temporary_password_expired";
     public const string RefreshTokenReused = "refresh_token_reused";
+    public const string AccountNotFound = "account_not_found";
+    public const string AccountStatusUnchanged = "account_status_unchanged";
 }

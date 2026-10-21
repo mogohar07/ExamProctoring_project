@@ -14,6 +14,9 @@ public sealed class CurrentUser(IHttpContextAccessor httpContextAccessor) : ICur
     public string Role => Principal.FindFirst(AuthClaimTypes.Role)?.Value
         ?? throw new InvalidOperationException("The access token has no role.");
 
+    public string SecurityStamp => Principal.FindFirst(AuthClaimTypes.SecurityStamp)?.Value
+        ?? throw new InvalidOperationException("The access token has no security stamp.");
+
     private ClaimsPrincipal Principal =>
         httpContextAccessor.HttpContext?.User is { Identity.IsAuthenticated: true } user
             ? user

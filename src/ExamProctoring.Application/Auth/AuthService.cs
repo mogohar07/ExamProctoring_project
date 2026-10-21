@@ -5,6 +5,7 @@ using ExamProctoring.Domain.Users;
 using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 
 namespace ExamProctoring.Application.Auth;
@@ -12,9 +13,10 @@ namespace ExamProctoring.Application.Auth;
 // Authentication use cases (§4.3): student sign-up, login, refresh, logout, change password and the caller's own account.
 //
 // Session changes for one account are serialized: login, refresh, logout and change-password each take the account
-// row's update lock as the first write of their transaction (holds across API instances). Login and refresh also
-// re-check the security stamp under that lock, so no session can be created or renewed with credentials that a
-// concurrent password change has just replaced, and a logout or password change always sees every session.
+// row's update lock as the first write of their transaction (holds across API instances). Login, refresh and
+// change-password also re-check the security stamp and Active status under that lock, so no session can be created,
+// renewed or replaced with credentials that a concurrent password change or admin action has just ended, and a
+// logout or password change always sees every session.
 public sealed class AuthService(
     UserManager<ApplicationUser> userManager,
     IAppDbContext db,
@@ -225,14 +227,15 @@ public sealed class AuthService(
     {
         var fieldErrors = await ValidateFieldsAsync(changePasswordValidator, request, cancellationToken);
 
-        // The account gate has just found this user; it is missing only if deleted in between.
-        var user = await userManager.FindByIdAsync(currentUser.UserId.ToString());
-        if (user is null)
+        // The account gate has just found this user; it is missing only if deleted in between. This copy is only for
+        // the password policy: it is not tracked, and the account is read again under the account row lock below.
+        var account = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == currentUser.UserId, cancellationToken);
+        if (account is null)
             return TokenRequestFailed(ErrorCodes.TokenInvalid, "A valid access token is required.");
 
         if (!string.IsNullOrEmpty(request.NewPassword))
         {
-            var policyErrors = await PasswordPolicyErrorsAsync(user, request.NewPassword);
+            var policyErrors = await PasswordPolicyErrorsAsync(account, request.NewPassword);
             if (policyErrors.Count > 0)
             {
                 fieldErrors[nameof(ChangePasswordRequest.NewPassword)] =
@@ -244,26 +247,46 @@ public sealed class AuthService(
         if (fieldErrors.Count > 0)
             return TokenRequestFailed(ErrorCodes.ValidationFailed, "One or more fields are invalid.", fieldErrors);
 
-        if (await userManager.IsLockedOutAsync(user))
-            return AccountLocked();
-
         var now = clock.UtcNow;
-        if (AccountStateFailure(user, now) is { } accountFailure)
-            return accountFailure;
-
-        var role = await SingleRoleAsync(user);
-
+        ApplicationUser user;
+        string role;
         GeneratedRefreshToken refreshToken;
         await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
         {
-            // Verifies the current password, then saves the new hash and a new security stamp. This is the first write,
-            // so it also takes the account row lock: a refresh or login in progress finishes first and is revoked below.
-            var changed = await userManager.ChangePasswordAsync(user, request.CurrentPassword!, request.NewPassword!);
-            if (!changed.Succeeded)
+            // The first write takes the account row lock, and only while this access token's session is still current:
+            // the account is active and still has the token's security stamp. A password change, temporary password,
+            // deactivation or reactivation that is in progress finishes first; if it changed the stamp, this request
+            // ends here with the same 401 the account gate gives such a token. A refresh or login in progress also
+            // finishes first, and its new token is revoked below.
+            if (!await sessions.LockAccountAsync(account.Id, cancellationToken, expectedSecurityStamp: currentUser.SecurityStamp))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
-                return await ChangePasswordFailedAsync(user, changed);
+                return TokenRequestFailed(ErrorCodes.TokenInvalid, "A valid access token is required.");
             }
+
+            // Read under the lock, so it is current and nothing else can change it before the commit. Identity's
+            // concurrency check on the updates below therefore always passes.
+            user = await userManager.FindByIdAsync(account.Id.ToString())
+                ?? throw new InvalidOperationException($"User {account.Id} disappeared while its row was locked.");
+
+            if (await userManager.IsLockedOutAsync(user))
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                return AccountLocked();
+            }
+
+            if (AccountStateFailure(user, now) is { } accountFailure)
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                return accountFailure;
+            }
+
+            role = await SingleRoleAsync(user);
+
+            // Verifies the current password, then saves the new hash and a new security stamp.
+            var changed = await userManager.ChangePasswordAsync(user, request.CurrentPassword!, request.NewPassword!);
+            if (!changed.Succeeded)
+                return await ChangePasswordFailedAsync(user, changed, transaction);
 
             user.MustChangePassword = false;
             user.TemporaryPasswordExpiresAt = null;
@@ -431,19 +454,29 @@ public sealed class AuthService(
         return errors;
     }
 
-    // A failed ChangePasswordAsync (the transaction is already rolled back). A wrong current password counts toward
-    // lockout (D9) and is reported on currentPassword; a new password that Identity rejects is reported on newPassword.
-    private async Task<Result<TokenResponse>> ChangePasswordFailedAsync(ApplicationUser user, IdentityResult result)
+    // A failed ChangePasswordAsync, still inside its transaction under the account row lock; nothing has been changed.
+    // A wrong current password counts toward lockout (D9): the failure is recorded under the lock and committed, so
+    // a concurrent change to the account cannot make the count fail or be lost. It is reported on currentPassword.
+    // A new password that Identity rejects changes nothing and is reported on newPassword.
+    private async Task<Result<TokenResponse>> ChangePasswordFailedAsync(
+        ApplicationUser user, IdentityResult result, IDbContextTransaction transaction)
     {
         if (result.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.PasswordMismatch)))
         {
-            await userManager.AccessFailedAsync(user);
+            // Not cancellable: a client that disconnects must not avoid the failed-attempt count.
+            var counted = await userManager.AccessFailedAsync(user);
+            if (!counted.Succeeded)
+                throw new InvalidOperationException($"Could not record the failed attempt: {string.Join(", ", counted.Errors.Select(e => e.Code))}");
+            await transaction.CommitAsync(CancellationToken.None);
+
             if (await userManager.IsLockedOutAsync(user))
                 return AccountLocked();
 
             return TokenRequestFailed(ErrorCodes.ValidationFailed, "One or more fields are invalid.",
                 new Dictionary<string, string[]> { [nameof(ChangePasswordRequest.CurrentPassword)] = ["The current password is incorrect."] });
         }
+
+        await transaction.RollbackAsync(CancellationToken.None);
 
         if (result.Errors.All(e => e.Code.StartsWith("Password", StringComparison.Ordinal)))
         {

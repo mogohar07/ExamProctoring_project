@@ -7,4 +7,7 @@ public interface ICurrentUser
     Guid UserId { get; }
 
     string Role { get; }
+
+    // The security stamp the access token was issued with; the account gate has checked it matched the account.
+    string SecurityStamp { get; }
 }

@@ -15,4 +15,13 @@ public static class RefreshTokenRevocationReasons
 
     // Revoked, with every other session of the user, when the password was changed.
     public const string PasswordChanged = "password_changed";
+
+    // Revoked, with every other session of the user, when an admin issued a temporary password (D19).
+    public const string TemporaryPasswordIssued = "temporary_password_issued";
+
+    // Revoked, with every other session of the user, when an admin deactivated the account (§6.3).
+    public const string AccountDeactivated = "account_deactivated";
+
+    // Revoked, with every other session of the user, when an admin reactivated the account (§6.3).
+    public const string AccountReactivated = "account_reactivated";
 }

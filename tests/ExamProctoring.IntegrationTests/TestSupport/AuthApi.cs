@@ -87,6 +87,29 @@ public sealed class AuthApi(WebApplicationFactory<Program> host)
         return client.PostAsync(path, new StringContent(json, Encoding.UTF8, "application/json"), Ct);
     }
 
+    public Task<HttpResponseMessage> PostWithoutBodyAsync(string path, string? accessToken = null)
+    {
+        var client = host.CreateClient();
+        if (accessToken is not null)
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return client.PostAsync(path, content: null, Ct);
+    }
+
+    // The admin seeded at startup (D20).
+    public async Task<Session> AdminLoginAsync()
+    {
+        var response = await PostLoginAsync(ApiFactory.SeedAdminEmail, ApiFactory.SeedAdminPassword);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await SessionFromAsync(response);
+    }
+
+    public async Task<Guid> SeedAdminIdAsync()
+    {
+        Guid id = default;
+        await WithUserManagerAsync(async userManager => id = (await userManager.FindByEmailAsync(ApiFactory.SeedAdminEmail))!.Id);
+        return id;
+    }
+
     public static async Task<Session> SessionFromAsync(HttpResponseMessage response)
     {
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
