@@ -14,4 +14,6 @@ public static class ErrorCodes
     public const string RefreshTokenReused = "refresh_token_reused";
     public const string AccountNotFound = "account_not_found";
     public const string AccountStatusUnchanged = "account_status_unchanged";
+    public const string ExamNotFound = "exam_not_found";
+    public const string ExamNotEditable = "exam_not_editable";
 }

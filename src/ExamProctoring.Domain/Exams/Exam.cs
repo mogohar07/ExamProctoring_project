@@ -4,8 +4,11 @@ namespace ExamProctoring.Domain.Exams;
 // exams never are (§5.1).
 public class Exam
 {
-    // §2.2: the per-exam warning limit unless the instructor sets another.
+    // The entity's starting value (R4). Exams created through the API take the configured warning limit instead (D26).
     public const int DefaultWarningLimit = 3;
+
+    // D25: an exam lasts at most 6 hours.
+    public const int MaxDurationMinutes = 360;
 
     public Guid Id { get; set; }
 
@@ -35,4 +38,11 @@ public class Exam
 
     // Fixed window (§2.2). Calculated, not stored.
     public DateTimeOffset EndsAt => StartsAt.AddMinutes(DurationMinutes);
+
+    // D28: Upcoming before StartsAt, Open from StartsAt until EndsAt, Closed from EndsAt on. Calculated on read for
+    // every status; it is not the exam's status.
+    public ExamPhase PhaseAt(DateTimeOffset now) =>
+        now < StartsAt ? ExamPhase.Upcoming
+        : now < EndsAt ? ExamPhase.Open
+        : ExamPhase.Closed;
 }

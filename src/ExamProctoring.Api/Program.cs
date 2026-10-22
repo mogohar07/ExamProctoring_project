@@ -37,12 +37,19 @@ builder.Services.AddApiAuthorization();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure();
 
+// Exam settings (D26): validated before the API starts (below) and again on start.
+builder.Services.AddOptions<ExamOptions>().BindConfiguration(ExamOptions.SectionName)
+    .Validate(options => options.WarningLimit is >= ExamOptions.MinWarningLimit and <= ExamOptions.MaxWarningLimit,
+        $"Exams:WarningLimit must be between {ExamOptions.MinWarningLimit} and {ExamOptions.MaxWarningLimit}.")
+    .ValidateOnStart();
+
 var app = builder.Build();
 
 // Fail fast, before touching the database, if the Jwt settings are missing or invalid (§6.8, D12).
 // The error lists what is wrong without ever including the signing key.
 _ = app.Services.GetRequiredService<IOptions<JwtOptions>>().Value;
 _ = app.Services.GetRequiredService<IOptions<AuthOptions>>().Value;
+_ = app.Services.GetRequiredService<IOptions<ExamOptions>>().Value;
 
 // Roles and the first admin (§6.8, D20). Fails startup if no admin exists and the Seed settings are missing or invalid.
 // Needs the migrations applied first; they are never applied here.

@@ -23,6 +23,8 @@ public static class ErrorResults
         [ErrorCodes.RefreshTokenReused] = StatusCodes.Status401Unauthorized,
         [ErrorCodes.AccountNotFound] = StatusCodes.Status404NotFound,
         [ErrorCodes.AccountStatusUnchanged] = StatusCodes.Status409Conflict,
+        [ErrorCodes.ExamNotFound] = StatusCodes.Status404NotFound,
+        [ErrorCodes.ExamNotEditable] = StatusCodes.Status409Conflict,
     };
 
     // statusCode overrides the usual status for the code, for an endpoint that documents a different one.

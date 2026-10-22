@@ -1,5 +1,7 @@
+using ExamProctoring.Application.Abstractions;
 using ExamProctoring.Application.Accounts;
 using ExamProctoring.Application.Auth;
+using ExamProctoring.Application.Exams;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,6 +14,8 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
         services.AddScoped<AccountSessions>();
         services.AddScoped<AccountAdminService>();
+        services.AddScoped<ExamService>();
+        services.AddSingleton<IExamSettings, ConfiguredExamSettings>();
         services.AddScoped<AuthService>();
 
         return services;
