@@ -25,6 +25,7 @@ public static class ErrorResults
         [ErrorCodes.AccountStatusUnchanged] = StatusCodes.Status409Conflict,
         [ErrorCodes.ExamNotFound] = StatusCodes.Status404NotFound,
         [ErrorCodes.ExamNotEditable] = StatusCodes.Status409Conflict,
+        [ErrorCodes.QuestionNotFound] = StatusCodes.Status404NotFound,
     };
 
     // statusCode overrides the usual status for the code, for an endpoint that documents a different one.

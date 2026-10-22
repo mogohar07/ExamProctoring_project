@@ -8,4 +8,6 @@ namespace ExamProctoring.Application.Exams;
 public sealed class ConfiguredExamSettings(IOptions<ExamOptions> options) : IExamSettings
 {
     public int WarningLimit => options.Value.WarningLimit;
+
+    public int MaxMcqOptions => options.Value.MaxMcqOptions;
 }

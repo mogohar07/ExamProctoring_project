@@ -15,6 +15,7 @@ public static class DependencyInjection
         services.AddScoped<AccountSessions>();
         services.AddScoped<AccountAdminService>();
         services.AddScoped<ExamService>();
+        services.AddScoped<QuestionService>();
         services.AddSingleton<IExamSettings, ConfiguredExamSettings>();
         services.AddScoped<AuthService>();
 

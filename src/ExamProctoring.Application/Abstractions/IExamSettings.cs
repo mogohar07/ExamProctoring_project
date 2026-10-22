@@ -6,4 +6,7 @@ public interface IExamSettings
 {
     // The warning limit copied onto each new exam.
     int WarningLimit { get; }
+
+    // The most options an MCQ may have (D32).
+    int MaxMcqOptions { get; }
 }

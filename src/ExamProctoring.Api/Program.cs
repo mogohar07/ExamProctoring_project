@@ -41,6 +41,8 @@ builder.Services.AddInfrastructure();
 builder.Services.AddOptions<ExamOptions>().BindConfiguration(ExamOptions.SectionName)
     .Validate(options => options.WarningLimit is >= ExamOptions.MinWarningLimit and <= ExamOptions.MaxWarningLimit,
         $"Exams:WarningLimit must be between {ExamOptions.MinWarningLimit} and {ExamOptions.MaxWarningLimit}.")
+    .Validate(options => options.MaxMcqOptions >= ExamOptions.MinMaxMcqOptions,
+        $"Exams:MaxMcqOptions must be at least {ExamOptions.MinMaxMcqOptions}.")
     .ValidateOnStart();
 
 var app = builder.Build();
