@@ -168,6 +168,114 @@ public sealed class ExamService(
         return Result<bool>.Success(true);
     }
 
+    // POST /api/exams/{id}/publish (D34, D36). A Draft that has not started, with at least one question and every
+    // question valid under the current rules and MCQ maximum, becomes Published at the current time.
+    public async Task<Result<ExamResponse>> PublishAsync(string examId, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(examId, out var id))
+            return Result<ExamResponse>.Failure(ExamNotFound());
+
+        var now = clock.UtcNow;
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+        if (!await LockAsync(id, ExamStatus.Draft, now, cancellationToken))
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            return Result<ExamResponse>.Failure(await StateRefusalAsync(id, ErrorCodes.ExamNotPublishable, exam => exam.Status switch
+            {
+                ExamStatus.Published => "The exam is already published.",
+                ExamStatus.Cancelled => "A cancelled exam cannot be published.",
+                _ => "The start time has passed.",
+            }, cancellationToken));
+        }
+
+        // The whole exam, read under the lock (D34 clarification: publication checks every question).
+        var questions = await db.Questions.AsNoTracking().Where(q => q.ExamId == id).ToListAsync(cancellationToken);
+        var options = await db.QuestionOptions.AsNoTracking()
+            .Where(o => db.Questions.Any(q => q.Id == o.QuestionId && q.ExamId == id))
+            .ToListAsync(cancellationToken);
+        if (PublicationCheck.FirstProblem(questions, options, settings.MaxMcqOptions) is { } problem)
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            return Result<ExamResponse>.Failure(new AppError(ErrorCodes.ExamNotPublishable, problem));
+        }
+
+        var published = await db.Exams.SingleAsync(e => e.Id == id, cancellationToken);
+        published.Status = ExamStatus.Published;
+        published.PublishedAt = now;
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        logger.LogInformation("Instructor {InstructorId} published exam {ExamId}.", currentUser.UserId, id);
+
+        return Result<ExamResponse>.Success(ExamResponse.From(published, now));
+    }
+
+    // POST /api/exams/{id}/unpublish (§2.2, D34, D36). A Published exam that has not started returns to Draft and loses
+    // its PublishedAt. The "no attempt" condition needs attempts, which arrive in Phase 4; until then none can exist.
+    public Task<Result<ExamResponse>> UnpublishAsync(string examId, CancellationToken cancellationToken) =>
+        ChangeStatusAsync(examId, ExamStatus.Draft, ErrorCodes.ExamNotUnpublishable, exam => exam.Status switch
+        {
+            ExamStatus.Draft => "The exam is not published.",
+            ExamStatus.Cancelled => "A cancelled exam cannot be unpublished.",
+            _ => "The start time has passed.",
+        }, cancellationToken);
+
+    // POST /api/exams/{id}/cancel (D30, D36). A Published exam that has not started becomes Cancelled, which is final.
+    // No cancellation time or reason is stored; PublishedAt is kept.
+    public Task<Result<ExamResponse>> CancelAsync(string examId, CancellationToken cancellationToken) =>
+        ChangeStatusAsync(examId, ExamStatus.Cancelled, ErrorCodes.ExamNotCancellable, exam => exam.Status switch
+        {
+            ExamStatus.Draft => "Only a published exam can be cancelled.",
+            ExamStatus.Cancelled => "The exam is already cancelled.",
+            _ => "The start time has passed.",
+        }, cancellationToken);
+
+    // Unpublish and cancel: both start from a Published exam that has not started.
+    private async Task<Result<ExamResponse>> ChangeStatusAsync(
+        string examId, ExamStatus newStatus, string refusalCode, Func<Exam, string> refusalMessage,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(examId, out var id))
+            return Result<ExamResponse>.Failure(ExamNotFound());
+
+        var now = clock.UtcNow;
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+        if (!await LockAsync(id, ExamStatus.Published, now, cancellationToken))
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            return Result<ExamResponse>.Failure(await StateRefusalAsync(id, refusalCode, refusalMessage, cancellationToken));
+        }
+
+        var exam = await db.Exams.SingleAsync(e => e.Id == id, cancellationToken);
+        exam.Status = newStatus;
+        if (newStatus == ExamStatus.Draft)
+            exam.PublishedAt = null;
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        logger.LogInformation("Instructor {InstructorId} changed exam {ExamId} to {Status}.", currentUser.UserId, id, newStatus);
+
+        return Result<ExamResponse>.Success(ExamResponse.From(exam, now));
+    }
+
+    // The exam row lock for a status change: only while the exam is the caller's, has the given status and has not
+    // started.
+    private async Task<bool> LockAsync(Guid id, ExamStatus status, DateTimeOffset now, CancellationToken cancellationToken) =>
+        await OwnExams()
+            .Where(e => e.Id == id && e.Status == status && e.StartsAt > now)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(e => e.Title, e => e.Title), cancellationToken) > 0;
+
+    // A status change matched nothing: 404 when the exam is not the caller's, otherwise the operation's 409 with the
+    // reason its state or start time gives.
+    private async Task<AppError> StateRefusalAsync(
+        Guid id, string code, Func<Exam, string> message, CancellationToken cancellationToken)
+    {
+        var exam = await OwnExams().AsNoTracking().SingleOrDefaultAsync(e => e.Id == id, cancellationToken);
+        return exam is null ? ExamNotFound() : new AppError(code, message(exam));
+    }
+
     private IQueryable<Exam> OwnExams() => db.Exams.Where(e => e.InstructorId == currentUser.UserId);
 
     // A write matched nothing: 404 when the exam is not the caller's (or does not exist), otherwise its state or

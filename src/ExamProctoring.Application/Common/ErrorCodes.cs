@@ -17,4 +17,7 @@ public static class ErrorCodes
     public const string ExamNotFound = "exam_not_found";
     public const string ExamNotEditable = "exam_not_editable";
     public const string QuestionNotFound = "question_not_found";
+    public const string ExamNotPublishable = "exam_not_publishable";
+    public const string ExamNotUnpublishable = "exam_not_unpublishable";
+    public const string ExamNotCancellable = "exam_not_cancellable";
 }

@@ -67,6 +67,48 @@ public sealed class ExamsController(ExamService examService) : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : this.ToProblem(result.Error!);
     }
 
+    // D34, D36: a valid Draft that has not started becomes Published.
+    [HttpPost("{id}/publish")]
+    [ProducesResponseType<ExamResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
+    public async Task<IActionResult> PublishExam(string id, CancellationToken cancellationToken)
+    {
+        var result = await examService.PublishAsync(id, cancellationToken);
+
+        return result.IsSuccess ? Ok(result.Value) : this.ToProblem(result.Error!);
+    }
+
+    // D36: a Published exam that has not started returns to Draft.
+    [HttpPost("{id}/unpublish")]
+    [ProducesResponseType<ExamResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
+    public async Task<IActionResult> UnpublishExam(string id, CancellationToken cancellationToken)
+    {
+        var result = await examService.UnpublishAsync(id, cancellationToken);
+
+        return result.IsSuccess ? Ok(result.Value) : this.ToProblem(result.Error!);
+    }
+
+    // D30, D36: a Published exam that has not started is cancelled for good.
+    [HttpPost("{id}/cancel")]
+    [ProducesResponseType<ExamResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
+    public async Task<IActionResult> CancelExam(string id, CancellationToken cancellationToken)
+    {
+        var result = await examService.CancelAsync(id, cancellationToken);
+
+        return result.IsSuccess ? Ok(result.Value) : this.ToProblem(result.Error!);
+    }
+
     // D30: Draft exams only.
     [HttpDelete("{id}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
