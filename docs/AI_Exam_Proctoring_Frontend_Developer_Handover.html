@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AI Exam Proctoring – Frontend Developer Handover</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10pt; line-height: 1.45; color: #1f2933; margin: 0; }
+  h1 { font-size: 20pt; margin: 0 0 6pt; }
+  h2 { font-size: 15pt; margin: 18pt 0 6pt; padding-bottom: 3pt; border-bottom: 2px solid #2457c5; color: #1c3f8f; break-after: avoid; }
+  h3 { font-size: 12pt; margin: 12pt 0 4pt; color: #1c3f8f; break-after: avoid; }
+  h4 { font-size: 10.5pt; margin: 10pt 0 3pt; break-after: avoid; }
+  p { margin: 4pt 0 6pt; }
+  ul, ol { margin: 3pt 0 6pt 16pt; padding: 0; }
+  li { margin: 1.5pt 0; }
+  table { width: 100%; border-collapse: collapse; margin: 6pt 0 9pt; font-size: 8.8pt; table-layout: fixed; }
+  th, td { border: 1px solid #c8d0da; padding: 3pt 5pt; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
+  th { background: #eaf0fb; font-weight: 600; }
+  tr { break-inside: avoid; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 8.6pt; background: #f2f4f7; padding: 0 2pt; border-radius: 2pt; overflow-wrap: anywhere; }
+  pre { font-family: Consolas, "Courier New", monospace; font-size: 8.2pt; line-height: 1.35; background: #f6f8fa; border: 1px solid #d9dee5; border-radius: 4pt; padding: 6pt 8pt; white-space: pre-wrap; overflow-wrap: anywhere; margin: 5pt 0 8pt; break-inside: avoid; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .page-break { break-before: page; }
+  .title-page { height: 250mm; display: flex; flex-direction: column; justify-content: center; }
+  .title-page h1 { font-size: 28pt; color: #1c3f8f; }
+  .subtitle { font-size: 14pt; color: #5f6b7a; margin-bottom: 18pt; }
+  .meta td { border: none; padding: 2pt 6pt 2pt 0; font-size: 10pt; }
+  .meta td:first-child { width: 42mm; color: #5f6b7a; }
+  .box { border: 1px solid #c8d0da; border-left: 4px solid #2457c5; background: #f7f9fd; padding: 6pt 9pt; margin: 6pt 0 9pt; break-inside: avoid; }
+  .warn { border-left-color: #b54708; background: #fffaf0; }
+  .bad { border-left-color: #b42318; background: #fdf3f2; }
+  .ok { border-left-color: #1e7a46; background: #f3faf6; }
+  .tag { display: inline-block; font-size: 7.6pt; font-weight: 700; padding: 0 4pt; border-radius: 3pt; color: #fff; vertical-align: 1pt; }
+  .t-impl { background: #1e7a46; } .t-rec { background: #2457c5; } .t-plan { background: #7a5200; } .t-block { background: #b42318; } .t-unv { background: #6b3fa0; }
+  .toc { columns: 2; column-gap: 10mm; font-size: 10pt; }
+  .toc a { color: #1f2933; text-decoration: none; }
+  .toc div { margin: 2pt 0; break-inside: avoid; }
+  .small { font-size: 8.6pt; color: #5f6b7a; }
+  .checklist li { list-style: none; margin-left: -12pt; }
+  .checklist li::before { content: "\2610  "; }
+</style>
+</head>
+<body>
+
+<!-- ===================== TITLE ===================== -->
+<section class="title-page">
+  <h1>AI-Based Exam Proctoring System</h1>
+  <div class="subtitle">Frontend Developer Handover &amp; Implementation Specification<br>React web application – Instructor Dashboard + student sign-up (Arabic / English)</div>
+  <table class="meta">
+    <tr><td>Document date</td><td>2026-10-23 (revision 2: owner scope decisions applied)</td></tr>
+    <tr><td>Backend verified at</td><td>Git commit <code>f0c11e3093b5e8bc2077aed83ea0351b9eee3729</code> (branch <code>main</code>, local, not pushed)</td></tr>
+    <tr><td>Backend scope covered</td><td>Phase 0, Phase 1 (authentication, admin accounts) and Phase 2 Steps 2.1–2.4 (exams, questions, lifecycle)</td></tr>
+    <tr><td>Source of truth</td><td>Backend source code in <code>src/</code>; approved plans and open decisions in <code>architecture-proposal.md</code> (Revision 3.10)</td></tr>
+    <tr><td>Audience</td><td>The frontend developer (working with Claude Code) and the project team</td></tr>
+  </table>
+  <div class="box" style="margin-top:18pt">
+    <strong>Labels used in this document</strong><br>
+    <span class="tag t-impl">IMPLEMENTED</span> exists in the backend source and is covered by passing automated tests ·
+    <span class="tag t-rec">RECOMMENDATION</span> frontend advice, not a backend contract ·
+    <span class="tag t-plan">PLANNED</span> documented in the architecture but not built ·
+    <span class="tag t-block">BLOCKED</span> waits for an unresolved architecture decision ·
+    <span class="tag t-unv">UNVERIFIED</span> could not be confirmed from the repository
+  </div>
+</section>
+
+<!-- ===================== TOC ===================== -->
+<section class="page-break">
+  <h1>Contents</h1>
+  <div class="toc">
+    <div><a href="#s0">0. How this document was produced</a></div>
+    <div><a href="#sA">A. Project overview</a></div>
+    <div><a href="#sB">B. Exact frontend scope</a></div>
+    <div><a href="#sC">C. Complete backend API reference</a></div>
+    <div><a href="#sD">D. Business logic and UI behaviour</a></div>
+    <div><a href="#sE">E. Authentication and security</a></div>
+    <div><a href="#sF">F. Frontend-to-backend integration</a></div>
+    <div><a href="#sG">G. Recommended React project structure</a></div>
+    <div><a href="#sH">H. UI/UX and validation specification</a></div>
+    <div><a href="#sI">I. Error handling matrix</a></div>
+    <div><a href="#sJ">J. Implementation plan</a></div>
+    <div><a href="#sK">K. Testing and acceptance checklist</a></div>
+    <div><a href="#sL">L. Ready-to-use Claude Code prompt</a></div>
+  </div>
+
+  <h2 id="s0">0. How this document was produced</h2>
+  <p>Every route, field, status code, message and rule below was read from the backend source code at commit <code>f0c11e3</code>:</p>
+  <ul>
+    <li>Controllers: <code>src/ExamProctoring.Api/Controllers/</code> (<code>AuthController</code>, <code>AdminAccountsController</code>, <code>ExamsController</code>, <code>QuestionsController</code>).</li>
+    <li>DTOs, validators and services: <code>src/ExamProctoring.Application/</code> (<code>Auth/</code>, <code>Accounts/</code>, <code>Exams/</code>, <code>Common/ErrorCodes.cs</code>).</li>
+    <li>Entities and rules: <code>src/ExamProctoring.Domain/</code>; EF Core configuration and migrations: <code>src/ExamProctoring.Infrastructure/</code>.</li>
+    <li>Error handling: <code>src/ExamProctoring.Api/Errors/</code>, <code>Middleware/GlobalExceptionHandler.cs</code>, <code>Authorization/</code>.</li>
+    <li>Configuration: <code>appsettings.json</code>, <code>appsettings.Development.json</code>, <code>Properties/launchSettings.json</code>.</li>
+    <li>Tests: <code>tests/ExamProctoring.IntegrationTests</code> (587 tests) and <code>tests/ExamProctoring.UnitTests</code> (368 tests). The latest full run (2026-10-23, at <code>f0c11e3</code>) passed 955 of 955; it was not re-run for this document.</li>
+  </ul>
+  <div class="box warn"><strong>Limitations of this review.</strong>
+    <ul>
+      <li>The original requirements PDF (<code>Requirments/Analysis Pahse Updated.pdf</code>) could not be rendered in this environment; the requirements summary relies on §1 of <code>architecture-proposal.md</code>, which was written from that PDF.</li>
+      <li>Behaviour is taken from source code and the integration tests. On 2026-10-23 the owner's local API (launch profile <code>http</code>) was also probed live: <code>GET /health</code> → 200 and <code>POST /api/auth/login</code> with an empty body → 400 <code>validation_failed</code>. No other live calls were made for this document.</li>
+      <li><code>architecture-proposal.md</code> Revision 3.10 (decisions D25–D36) is <strong>not committed</strong>; the committed copy is Revision 3.9, which predates the exam decisions. The repository has no Git remote yet; this document, <code>frontend/</code> and Revision 3.10 must be committed and pushed to the GitHub repository (owner's step) before a developer can receive them.</li>
+      <li>The <code>frontend/</code> draft (untracked) has never been installed, type-checked, built or tested, because Node.js was not installed on the machine that wrote it. The owner's decision is to <strong>reuse</strong> it (Section G.2), verifying it first.</li>
+    </ul>
+  </div>
+  <div class="box ok"><strong>Owner decisions applied in revision 2 (2026-10-23)</strong>
+    <ol>
+      <li><strong>Scope:</strong> the React app is the <strong>Instructor Dashboard</strong>.</li>
+      <li><strong>Admin screens are excluded</strong> from React; admin functions belong to the Flutter app. The admin API is documented for reference only (C.6).</li>
+      <li><strong>Student sign-up is included</strong>, using only the existing <code>POST /api/auth/register</code> contract (C.3, D.10). After sign-up the student sees a success message with a sign-in link; there is no automatic sign-in.</li>
+      <li><strong>The existing <code>frontend/</code> draft is reused</strong>, not replaced (G.2).</li>
+      <li><strong>Arabic and English</strong> with a language toggle; Arabic is right-to-left, English left-to-right; <strong>Arabic is the default</strong> on a first visit (H.9).</li>
+      <li><strong>Delivery</strong> through the project's GitHub repository. Nothing is committed or pushed without the owner's explicit approval.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== A ===================== -->
+<section class="page-break">
+<h2 id="sA">A. Project overview</h2>
+
+<h3>A.1 Purpose</h3>
+<p>The AI-Based Exam Proctoring System provides a controlled environment for university exams: identity verification, AI proctoring, randomized exams, automated grading where possible, AI question generation, integrity scores and collusion reports. Actors are Instructor, Student, Administrator and the AI proctoring module.</p>
+
+<h3>A.2 Backend technology (verified)</h3>
+<table>
+  <tr><th style="width:30%">Item</th><th>Verified value</th></tr>
+  <tr><td>Framework</td><td>ASP.NET Core Web API, .NET 10 (SDK 10.0.402 pinned in <code>global.json</code>); controllers with <code>[ApiController]</code></td></tr>
+  <tr><td>Data</td><td>SQL Server with EF Core 10 (compatibility level 160); migrations applied manually, never at startup</td></tr>
+  <tr><td>Identity</td><td>ASP.NET Core Identity (<code>AddIdentityCore</code>, no cookies) + JWT bearer tokens (HS256) + rotating refresh tokens stored hashed in the database</td></tr>
+  <tr><td>Validation</td><td>FluentValidation in the Application layer</td></tr>
+  <tr><td>Errors</td><td>RFC 9457 ProblemDetails (<code>application/problem+json</code>) with a stable <code>code</code> extension</td></tr>
+  <tr><td>API documentation</td><td>OpenAPI document <code>/openapi/v1.json</code> and Swagger UI <code>/swagger</code>, Development environment only; no JWT "Authorize" button yet</td></tr>
+  <tr><td>Projects</td><td><code>Domain</code>, <code>Application</code>, <code>Infrastructure</code>, <code>Api</code>, <code>UnitTests</code>, <code>IntegrationTests</code> in <code>ExamProctoring.slnx</code></td></tr>
+</table>
+
+<h3>A.3 The two client applications</h3>
+<table>
+  <tr><th style="width:22%">Client</th><th>Role according to the architecture (§3.1)</th><th style="width:28%">This handover</th></tr>
+  <tr><td>Web exam app (website)</td><td>Student only: login, face enrollment, exams intended for the student, identity check, camera/microphone checks, fullscreen lockdown, randomized exam, autosave, submit, in-browser violation detectors.</td><td>The student pages are <span class="tag t-block">BLOCKED</span> / <span class="tag t-plan">PLANNED</span>: no student exam endpoint exists.</td></tr>
+  <tr><td>Flutter mobile app</td><td>Student sign-up, login for all roles, instructor exam/schedule/question management, results, reports; admin account functions.</td><td>Out of scope (not built here).</td></tr>
+</table>
+<div class="box warn"><strong>Recorded deviation from the architecture.</strong> Architecture §3.1 assigns instructor exam management <em>and</em> student sign-up to the Flutter app and makes the website student-only. The owner decided (2026-10-23) that the <em>React</em> app is the Instructor Dashboard and also offers student sign-up. <strong>Impact:</strong> none on the API (these endpoints work for any HTTP client). The CORS setting is still named for the web exam app (<code>Cors:WebExamOrigins</code>), and <code>architecture-proposal.md</code> has not been updated to record this decision. Follow this document, not §3.1, for the React scope.</div>
+
+<h3>A.4 Responsibilities</h3>
+<table>
+  <tr><th style="width:50%">Backend (authoritative)</th><th>Frontend</th></tr>
+  <tr><td>Authentication, account status, roles, forced password change, ownership checks on every request; all validation and business rules; state transitions; time checks against the server clock; final error decisions.</td><td>Collect input, give early validation feedback, call the API, show results and server errors, keep the UI consistent with the server's answers, never assume an action is allowed just because the UI showed a button.</td></tr>
+</table>
+
+<h3>A.5 Implementation status</h3>
+<table>
+  <tr><th style="width:30%">Area</th><th style="width:22%">Status</th><th>Notes</th></tr>
+  <tr><td>Authentication (login, refresh, logout, me, change password, student sign-up)</td><td><span class="tag t-impl">IMPLEMENTED</span></td><td>Phase 1</td></tr>
+  <tr><td>Admin account management</td><td><span class="tag t-impl">IMPLEMENTED</span></td><td>Admin role only; architecture assigns it to Flutter</td></tr>
+  <tr><td>Exam management (Step 2.2)</td><td><span class="tag t-impl">IMPLEMENTED</span></td><td>commit <code>5b515bc</code></td></tr>
+  <tr><td>Question management (Step 2.3)</td><td><span class="tag t-impl">IMPLEMENTED</span></td><td>commit <code>20259a7</code></td></tr>
+  <tr><td>Publish / unpublish / cancel (Step 2.4)</td><td><span class="tag t-impl">IMPLEMENTED</span></td><td>commit <code>f0c11e3</code>; the "no attempt exists" unpublish check is deferred to Phase 4</td></tr>
+  <tr><td>Student exam list/details (Step 2.5)</td><td><span class="tag t-block">BLOCKED</span></td><td>Open decision §2.4: how students are assigned to exams</td></tr>
+  <tr><td>Attempts, identity verification, randomization, submission, grading, results</td><td><span class="tag t-plan">PLANNED</span></td><td>Phase 4</td></tr>
+  <tr><td>Lecture upload, AI question generation</td><td><span class="tag t-plan">PLANNED</span></td><td>Phase 3</td></tr>
+  <tr><td>Proctoring events, warnings, termination</td><td><span class="tag t-plan">PLANNED</span></td><td>Phase 5 (the exam's <code>warningLimit</code> is stored but unused)</td></tr>
+  <tr><td>Integrity score, collusion report</td><td><span class="tag t-plan">PLANNED</span></td><td>Phase 6</td></tr>
+  <tr><td>Password recovery by email</td><td><span class="tag t-plan">PLANNED</span></td><td>Decision D17; details open</td></tr>
+</table>
+</section>
+
+<!-- ===================== B ===================== -->
+<section class="page-break">
+<h2 id="sB">B. Exact frontend scope</h2>
+
+<h3>B.1 Scope categories</h3>
+<table>
+  <tr><th style="width:25%">Category</th><th>Features</th></tr>
+  <tr><td><span class="tag t-impl">IMPLEMENTED</span> build now</td><td>Instructor sign-in; forced password change after a temporary password; sign-out; session refresh; exam list with status filter and pagination; create, view, edit and delete (Draft) exams; question list, create, replace, delete (MCQ and Essay); publish, unpublish, cancel; <strong>student sign-up</strong> (<code>POST /api/auth/register</code>, D.10); <strong>Arabic/English with RTL/LTR</strong> and a language toggle (H.9).</td></tr>
+  <tr><td>Implemented but excluded from React (owner decision)</td><td>The admin account endpoints (<code>/api/admin/*</code>, C.6). Admin screens belong to the Flutter app. Do not build admin pages. For local testing, an instructor account is created by calling the admin API directly (F.6).</td></tr>
+  <tr><td><span class="tag t-plan">PLANNED</span> not implemented</td><td>Exam taking, identity verification, webcam/microphone monitoring, warnings, results, grading, AI question generation, integrity and collusion reports, password recovery.</td></tr>
+  <tr><td><span class="tag t-block">BLOCKED</span></td><td>Student "my exams" list and exam info (<code>GET me/exams</code>) – no endpoint exists; depends on architecture §2.4.</td></tr>
+</table>
+
+<h3>B.2 Pages</h3>
+<table>
+  <tr><th style="width:15%">Page / route (recommended)</th><th style="width:11%">Access</th><th>Purpose, data and components</th><th style="width:22%">API calls</th></tr>
+  <tr><td>Sign in <code>/login</code></td><td>Anonymous</td><td>Email + password form. On success: if <code>mustChangePassword</code> → change-password page; else → exam list (or the page the user tried to open). Errors shown inline (Section I).</td><td><code>POST /api/auth/login</code></td></tr>
+  <tr><td>Sign up <code>/register</code></td><td>Anonymous</td><td>Student sign-up form: full name, email, password, confirm password (exactly the four backend fields). On 201 show the success panel from D.10 (no tokens are returned; no automatic sign-in). Link to it from the sign-in page ("Create a student account").</td><td><code>POST /api/auth/register</code></td></tr>
+  <tr><td>Change password <code>/change-password</code></td><td>Any signed-in account</td><td>Current (temporary) password, new password, repeat new password (repeat is frontend-only). Mandatory while <code>mustChangePassword</code> is true; every other API call answers 403 <code>password_change_required</code> until done.</td><td><code>POST /api/auth/change-password</code></td></tr>
+  <tr><td>Layout (all pages below)</td><td>Instructor</td><td>Header: app name, links "Exams" and "New exam", user's full name, language toggle (العربية / English), Sign out. The toggle is also shown on the sign-in, sign-up and change-password pages.</td><td><code>POST /api/auth/logout</code></td></tr>
+  <tr><td>Exam list <code>/exams</code></td><td>Instructor</td><td>Table (cards on phones): title (+ description excerpt), start, duration, status badge, phase badge. Status filter (All/Draft/Published/Cancelled), page size, previous/next pagination with "x–y of total". Empty state with "Create your first exam".</td><td><code>GET /api/exams</code></td></tr>
+  <tr><td>Create exam <code>/exams/new</code></td><td>Instructor</td><td>Exam form (title, description, start date/time with the user's time-zone hint, duration). On success go to the new exam's details page.</td><td><code>POST /api/exams</code></td></tr>
+  <tr><td>Exam details <code>/exams/:id</code></td><td>Instructor (owner)</td><td>Title, status and phase badges, description, start, end, duration, published time, warning limit (read-only). Action bar: Edit, Publish, Unpublish, Cancel exam, Delete (per D.4). Questions panel below.</td><td><code>GET /api/exams/{id}</code>, lifecycle POSTs, <code>DELETE /api/exams/{id}</code></td></tr>
+  <tr><td>Edit exam <code>/exams/:id/edit</code></td><td>Instructor (owner)</td><td>Same form, prefilled. Only reachable while the exam is Draft/Published and has not started; otherwise show an explanation.</td><td><code>GET</code> + <code>PUT /api/exams/{id}</code></td></tr>
+  <tr><td>Questions panel (inside details)</td><td>Instructor (owner)</td><td>Ordered list (Q1, Q2 …) with type, marks, text, options with the correct one marked, model answer; total marks. Add / Edit / Delete when editable. Inline question editor (D.5, H.6).</td><td><code>GET</code>/<code>POST /api/exams/{id}/questions</code>, <code>PUT</code>/<code>DELETE /api/questions/{id}</code></td></tr>
+  <tr><td>Not found / no access</td><td>Any</td><td>Unknown route; non-instructor account ("Instructor access only" with Sign out). A signed-in <strong>Student</strong> sees the same screen with the D.10 note that student exam features are not available yet.</td><td>–</td></tr>
+</table>
+
+<h3>B.3 Main user flows</h3>
+<ol>
+  <li><strong>First sign-in of a new instructor:</strong> an admin created the account (via the Flutter app or <code>POST /api/admin/instructors</code>) and gave the instructor a temporary password → sign in → forced change-password page → exam list.</li>
+  <li><strong>Prepare an exam:</strong> New exam → details page → add questions → Publish (server validates the whole exam) → status Published.</li>
+  <li><strong>Change before the start:</strong> edit details or questions of a Draft or Published exam while it has not started; unpublish to return to Draft; or cancel (irreversible).</li>
+  <li><strong>After the start time:</strong> the exam and its questions are read-only; a Draft can still be deleted.</li>
+  <li><strong>Student sign-up:</strong> Sign up → 201 → success panel ("account created; student exam features are not available yet") with a link to sign in. Signing in works, but a Student has no pages in this app yet (§2.4 is open).</li>
+</ol>
+</section>
+
+<!-- ===================== C ===================== -->
+<section class="page-break">
+<h2 id="sC">C. Complete backend API reference</h2>
+
+<h3>C.1 Conventions (all endpoints)</h3>
+<ul>
+  <li>Base path <code>/api</code>. JSON bodies, <strong>camelCase</strong> property names. Enums are sent and returned as <strong>strings</strong> (<code>"Draft"</code>, <code>"Mcq"</code>). GUIDs are strings. Times are ISO 8601 strings; responses always use UTC (<code>+00:00</code>).</li>
+  <li>Protected endpoints need <code>Authorization: Bearer &lt;accessToken&gt;</code>. Every protected endpoint also enforces: active account, unchanged security stamp, and the forced password change (except where noted).</li>
+  <li>Errors: ProblemDetails with <code>status</code>, <code>detail</code>, a machine-readable <code>code</code> and, for validation errors, <code>errors</code> (field → messages). ASP.NET Core also adds <code>type</code>, <code>title</code> and usually <code>traceId</code>; don't rely on those.</li>
+  <li>A role failure (e.g. a Student calling an instructor endpoint) is <code>403</code> <em>without</em> a <code>code</code>. A missing/invalid/expired token is <code>401</code> with <code>code: "token_invalid"</code> and header <code>WWW-Authenticate: Bearer</code>.</li>
+  <li>Unknown ids, malformed ids and other instructors' data all answer <code>404</code> (existence is never revealed).</li>
+  <li>Create endpoints return <code>201</code> with the body and <strong>no</strong> <code>Location</code> header.</li>
+</ul>
+
+<h3>C.2 Endpoint index</h3>
+<table>
+  <tr><th style="width:9%">Method</th><th style="width:33%">Route</th><th style="width:20%">Access</th><th>Status</th></tr>
+  <tr><td>POST</td><td><code>/api/auth/login</code></td><td>Anonymous, 10/min/IP</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>POST</td><td><code>/api/auth/refresh</code></td><td>Anonymous, 30/min/IP</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>POST</td><td><code>/api/auth/logout</code></td><td>Signed in*</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>POST</td><td><code>/api/auth/change-password</code></td><td>Signed in*</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>GET</td><td><code>/api/auth/me</code></td><td>Signed in*</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>POST</td><td><code>/api/auth/register</code></td><td>Anonymous, 5/min/IP</td><td><span class="tag t-impl">IMPLEMENTED</span> (student sign-up, in React scope)</td></tr>
+  <tr><td>GET</td><td><code>/api/exams</code></td><td>Instructor</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>POST</td><td><code>/api/exams</code></td><td>Instructor</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>GET</td><td><code>/api/exams/{id}</code></td><td>Instructor (owner)</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>PUT</td><td><code>/api/exams/{id}</code></td><td>Instructor (owner)</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>DELETE</td><td><code>/api/exams/{id}</code></td><td>Instructor (owner)</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>POST</td><td><code>/api/exams/{id}/publish</code></td><td>Instructor (owner)</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>POST</td><td><code>/api/exams/{id}/unpublish</code></td><td>Instructor (owner)</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>POST</td><td><code>/api/exams/{id}/cancel</code></td><td>Instructor (owner)</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>GET</td><td><code>/api/exams/{examId}/questions</code></td><td>Instructor (owner)</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>POST</td><td><code>/api/exams/{examId}/questions</code></td><td>Instructor (owner)</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>PUT</td><td><code>/api/questions/{id}</code></td><td>Instructor (owner)</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>DELETE</td><td><code>/api/questions/{id}</code></td><td>Instructor (owner)</td><td><span class="tag t-impl">IMPLEMENTED</span></td></tr>
+  <tr><td>GET</td><td><code>/api/admin/accounts</code>, <code>/api/admin/accounts/{id}</code></td><td>Admin</td><td><span class="tag t-impl">IMPLEMENTED</span> (no React screens)</td></tr>
+  <tr><td>POST</td><td><code>/api/admin/instructors</code>, <code>/api/admin/accounts/{id}/temporary-password</code>, <code>/deactivate</code>, <code>/reactivate</code></td><td>Admin</td><td><span class="tag t-impl">IMPLEMENTED</span> (no React screens)</td></tr>
+  <tr><td>GET</td><td><code>/health</code></td><td>Anonymous</td><td><span class="tag t-impl">IMPLEMENTED</span> (not under <code>/api</code>)</td></tr>
+</table>
+<p class="small">* "Signed in": any role; allowed even while a password change is pending. Every other protected endpoint answers 403 <code>password_change_required</code> during a pending change.</p>
+<div class="box bad"><strong>Endpoints that do NOT exist</strong> (do not call them): <code>GET /api/questions/{id}</code> (single question), any question reorder endpoint, <code>GET me/exams</code> and <code>GET me/exams/{id}</code>, any attempt, answer, result, grading, face-reference, lecture, generation, proctoring-event or report endpoint, password reset / forgot password, a settings endpoint that exposes <code>Exams:MaxMcqOptions</code>, and exam search by title.</div>
+
+<h3>C.3 Authentication endpoints</h3>
+
+<h4>POST /api/auth/login</h4>
+<p>Request <code>LoginRequest</code>: <code>{ "email": string, "password": string }</code>. Body limit 16 KB. Validation: "Email is required.", "Password is required."</p>
+<pre><code>// 200 TokenResponse
+{
+  "tokenType": "Bearer",
+  "accessToken": "&lt;JWT&gt;",
+  "accessTokenExpiresAt": "2026-10-23T09:15:00+00:00",
+  "refreshToken": "&lt;opaque token&gt;",
+  "refreshTokenExpiresAt": "2026-10-30T09:00:00+00:00",
+  "mustChangePassword": false,
+  "user": { "id": "&lt;guid&gt;", "fullName": "Dr. Example", "email": "instructor@example.edu", "role": "Instructor" }
+}</code></pre>
+<p>Errors: 400 <code>validation_failed</code>; 401 <code>invalid_credentials</code> ("The email or password is incorrect."); 401 <code>account_locked</code> (after 5 failed attempts, 15 minutes); 403 <code>account_deactivated</code>; 403 <code>temporary_password_expired</code> ("The temporary password has expired. Ask an administrator for a new one."); 413 body too large; 429 rate limit. Role values: <code>Admin</code>, <code>Instructor</code>, <code>Student</code>.</p>
+
+<h4>POST /api/auth/refresh</h4>
+<p>Request <code>{ "refreshToken": string }</code>. 200 → a new <code>TokenResponse</code> (new access <em>and</em> refresh token; the old refresh token is used up). Errors: 400 <code>validation_failed</code>; 401 <code>token_invalid</code> ("The refresh token is invalid or has expired."); 401 <code>refresh_token_reused</code> (an already-rotated token was presented: the whole session family is revoked); 403 <code>account_deactivated</code>/<code>temporary_password_expired</code>; 429.</p>
+
+<h4>POST /api/auth/logout</h4>
+<p>Bearer token required. Request <code>{ "refreshToken": string }</code>. 204 (ends that session's token family; the current access token stays valid until it expires). Errors: 400, 401.</p>
+
+<h4>POST /api/auth/change-password</h4>
+<p>Bearer token required (allowed during a pending change). Request <code>{ "currentPassword": string, "newPassword": string }</code> (no confirmation field). 200 → new <code>TokenResponse</code>; every earlier session and access token of the account stops working. Errors: 400 <code>validation_failed</code> with field messages, e.g. <code>currentPassword</code>: "The current password is incorrect.", <code>newPassword</code>: "The new password must be different from the current password." or Identity policy messages; 401 <code>account_locked</code> after too many wrong current passwords; 401 <code>token_invalid</code>.</p>
+<p>Password policy (Identity): at least 8 characters, an uppercase letter, a lowercase letter and a digit; no symbol required.</p>
+
+<h4>GET /api/auth/me</h4>
+<p>200 <code>{ "id", "fullName", "email", "role", "mustChangePassword" }</code>. 401 <code>token_invalid</code>.</p>
+
+<h4>POST /api/auth/register (student sign-up – in React scope)</h4>
+<p>Source: <code>AuthController.Register</code>, <code>RegisterStudentRequest</code>, <code>RegisterStudentRequestValidator</code>, <code>AccountFieldRules</code>, <code>EmailRules</code>, <code>AuthService.RegisterStudentAsync</code>. Anonymous; rate limit 5 per minute per IP. No body-size attribute (the 16 KB limit applies only to login, refresh, logout and change-password).</p>
+<pre><code>// Request RegisterStudentRequest – exactly these four fields
+{ "fullName": "Sara Ahmed", "email": "sara@example.edu", "password": "Example1pass", "confirmPassword": "Example1pass" }
+
+// 201 RegisterStudentResponse – no tokens; the user is NOT signed in
+{ "id": "&lt;guid&gt;", "fullName": "Sara Ahmed", "email": "sara@example.edu", "role": "Student" }</code></pre>
+<table>
+  <tr><th style="width:20%">Field (error key)</th><th>Server rule and exact message</th></tr>
+  <tr><td><code>fullName</code></td><td>Required after trimming: "Full name is required."; at most 150 characters after trimming: "Full name must be at most 150 characters."; no control characters: "Full name must not contain control characters.". No other format rule; Arabic names are valid.</td></tr>
+  <tr><td><code>email</code></td><td>Required: "Email is required."; otherwise "Email is not a valid email address." unless, after trimming: 1–256 characters, no whitespace, control or invisible format (Unicode Cf) characters, exactly one <code>@</code> with text on both sides, and a domain that contains a dot, does not start or end with <code>.</code> or <code>-</code> and contains no <code>..</code>. Any email domain; non-English letters allowed.</td></tr>
+  <tr><td><code>password</code></td><td>Required: "Password is required."; then the Identity policy (at least 8 characters, an uppercase letter, a lowercase letter, a digit) with Identity's own messages.</td></tr>
+  <tr><td><code>confirmPassword</code></td><td>Must equal <code>password</code>: "Passwords do not match." Validated, never stored.</td></tr>
+</table>
+<p>Other responses: 409 <code>duplicate_account</code> ("An account with this email already exists."; also for deactivated accounts and any role); 429 rate limit. Extra JSON properties (for example <code>role</code> or <code>universityId</code>) are ignored; the role is always Student and the account is Active immediately (no email verification).</p>
+<div class="box ok"><strong>University identification is not a blocker.</strong> The Revision 3.3 open decision on identifying a student's university was <strong>withdrawn in Revision 3.4</strong> (D11, D12): any university and any email domain are accepted, accounts store no university data, and the sign-up form has exactly the four fields above. §2.5 keeps "university affiliation" only as a <em>future</em> question that "is not a registration requirement" and would never be added to the sign-up form. Do <strong>not</strong> add a university field, dropdown or ID.</div>
+
+<h3>C.4 Exam endpoints (Step 2.2 and 2.4)</h3>
+
+<h4>Exam response <code>ExamResponse</code> (exact fields and order)</h4>
+<table>
+  <tr><th style="width:24%">Field</th><th style="width:20%">Type</th><th>Meaning</th></tr>
+  <tr><td><code>id</code></td><td>string (GUID)</td><td>Exam id</td></tr>
+  <tr><td><code>title</code></td><td>string</td><td>1–200 characters</td></tr>
+  <tr><td><code>description</code></td><td>string | null</td><td>Up to 2000 characters</td></tr>
+  <tr><td><code>startsAt</code></td><td>string (date-time, UTC)</td><td>Start instant</td></tr>
+  <tr><td><code>durationMinutes</code></td><td>integer</td><td>1–360</td></tr>
+  <tr><td><code>endsAt</code></td><td>string (date-time, UTC)</td><td>Calculated: start + duration</td></tr>
+  <tr><td><code>status</code></td><td><code>"Draft" | "Published" | "Cancelled"</code></td><td>Lifecycle state</td></tr>
+  <tr><td><code>phase</code></td><td><code>"Upcoming" | "Open" | "Closed"</code></td><td>Calculated when read: before start / start ≤ now &lt; end / from end on</td></tr>
+  <tr><td><code>warningLimit</code></td><td>integer</td><td>Copied from server configuration (20) at creation; read-only for instructors</td></tr>
+  <tr><td><code>publishedAt</code></td><td>string | null</td><td>Set on publish, cleared on unpublish, kept on cancel</td></tr>
+</table>
+
+<h4>GET /api/exams</h4>
+<p>The caller's own exams only. Query: <code>status</code> (optional; <code>Draft</code>, <code>Published</code>, <code>Cancelled</code>, any letter case; numbers rejected), <code>page</code> (≥ 1, default 1), <code>pageSize</code> (1–100, default 10). Sorted by <code>startsAt</code> newest first, then by id (fixed; no sort parameter). Invalid values → 400 (never adjusted): "Status must be Draft, Published or Cancelled.", "Page must be 1 or greater.", "Page size must be between 1 and 100."; non-numeric values → 400 <code>validation_failed</code> from model binding. A page beyond the end returns empty <code>items</code> with the real <code>totalCount</code>.</p>
+<pre><code>// 200 ExamListResponse
+{ "items": [ /* ExamResponse */ ], "page": 1, "pageSize": 10, "totalCount": 12 }</code></pre>
+
+<h4>POST /api/exams &nbsp;·&nbsp; PUT /api/exams/{id}</h4>
+<p>Request <code>ExamRequest</code> (same for create and full replacement):</p>
+<pre><code>{
+  "title": "Midterm",
+  "description": "Chapters 1-4",            // optional; null or blank = none
+  "startsAt": "2026-11-01T11:00:00+02:00",  // offset REQUIRED (Z or ±hh:mm)
+  "durationMinutes": 90
+}</code></pre>
+<p>Create: <strong>201</strong> <code>ExamResponse</code> with <code>status: "Draft"</code>, <code>startsAt</code> converted to UTC (here <code>2026-11-01T09:00:00+00:00</code>), <code>warningLimit: 20</code>. Update: <strong>200</strong> <code>ExamResponse</code>; allowed only for Draft or Published exams before <code>startsAt</code>; status, warning limit and <code>publishedAt</code> never change. Extra fields (<code>status</code>, <code>warningLimit</code>, <code>publishedAt</code>, <code>id</code>, <code>instructorId</code>) are ignored.</p>
+<p>Validation (400 <code>validation_failed</code>, field keys <code>title</code>, <code>description</code>, <code>startsAt</code>, <code>durationMinutes</code>): "Title is required.", "Title must be at most 200 characters.", "Description must be at most 2000 characters.", "Start time is required.", "Start time must be a date and time with a time-zone offset, for example 2026-11-01T09:00:00Z or 2026-11-01T11:00:00+02:00.", "Start time is too far in the future.", "Start time must be in the future." (create always; update only when the instant changes), "Duration is required.", "Duration must be between 1 and 360 minutes.". Lengths count after trimming.</p>
+<p>Other errors: 404 <code>exam_not_found</code> (PUT); 409 <code>exam_not_editable</code> (PUT on a started or Cancelled exam: "The exam can no longer be changed in its current state."). Validation runs before the exam is looked up, so an invalid body for an unknown id still gives 400.</p>
+
+<h4>GET /api/exams/{id}</h4>
+<p>200 <code>ExamResponse</code>; 404 <code>exam_not_found</code> ("The exam was not found.").</p>
+
+<h4>DELETE /api/exams/{id}</h4>
+<p>Draft only (also after its start time); deletes its questions and options. 204 with an empty body. 409 <code>exam_not_editable</code> for Published or Cancelled; 404 <code>exam_not_found</code>.</p>
+
+<h4>POST /api/exams/{id}/publish · /unpublish · /cancel</h4>
+<p>No request body. Success: <strong>200</strong> with the updated <code>ExamResponse</code>. Refusal: 409 with the exact <code>detail</code> messages in D.4. Also 401, 403, 404 <code>exam_not_found</code>.</p>
+<table>
+  <tr><th style="width:16%">Action</th><th>Allowed when</th><th style="width:26%">Effect</th><th style="width:20%">Refusal code</th></tr>
+  <tr><td>publish</td><td>Draft, <code>startsAt</code> in the future, at least one question, every question valid under the current rules and the current <code>Exams:MaxMcqOptions</code></td><td>status Published, <code>publishedAt</code> = server time</td><td><code>exam_not_publishable</code></td></tr>
+  <tr><td>unpublish</td><td>Published, before <code>startsAt</code> (attempt check deferred to Phase 4)</td><td>status Draft, <code>publishedAt</code> = null</td><td><code>exam_not_unpublishable</code></td></tr>
+  <tr><td>cancel</td><td>Published, before <code>startsAt</code></td><td>status Cancelled (terminal), <code>publishedAt</code> kept</td><td><code>exam_not_cancellable</code></td></tr>
+</table>
+
+<h3>C.5 Question endpoints (Step 2.3)</h3>
+<h4>Question response <code>QuestionResponse</code> (exact fields and order)</h4>
+<pre><code>{
+  "id": "&lt;question guid&gt;",
+  "examId": "&lt;exam guid&gt;",
+  "type": "Mcq",                       // "Mcq" | "Essay"
+  "text": "Capital of France?",
+  "marks": 2.50,                       // number, always 2 decimals
+  "modelAnswer": "Paris is the capital.",   // string | null
+  "position": 1,                       // 1..n, assigned by the server
+  "options": [                         // [] for Essay
+    { "id": "&lt;guid&gt;", "text": "Paris", "isCorrect": true,  "position": 1 },
+    { "id": "&lt;guid&gt;", "text": "Lyon",  "isCorrect": false, "position": 2 }
+  ]
+}</code></pre>
+
+<h4>GET /api/exams/{examId}/questions</h4>
+<p>200 <code>{ "items": [QuestionResponse] }</code> in position order, <strong>not paged</strong>; allowed at any exam status or time. 404 <code>exam_not_found</code>.</p>
+
+<h4>POST /api/exams/{examId}/questions &nbsp;·&nbsp; PUT /api/questions/{id}</h4>
+<pre><code>{
+  "type": "Mcq",                     // "Mcq" | "Essay" (any letter case; numbers rejected)
+  "text": "Capital of France?",
+  "marks": 2.5,
+  "modelAnswer": "Paris is the capital.",   // optional; blank becomes null
+  "options": [
+    { "text": "Paris", "isCorrect": true },
+    { "text": "Lyon",  "isCorrect": false },
+    { "text": "Nice" }               // missing isCorrect = false
+  ]
+}</code></pre>
+<p>POST: <strong>201</strong> <code>QuestionResponse</code>, appended at the end. PUT: <strong>200</strong>, full replacement: keeps id, exam and position; old options deleted, new options stored with <strong>new ids</strong> in the order sent. Writes allowed only for a Draft or Published exam before its start → otherwise 409 <code>exam_not_editable</code>. 404: <code>exam_not_found</code> (POST), <code>question_not_found</code> (PUT; unknown, malformed or other instructor's question: "The question was not found.").</p>
+<p>Validation messages (400, field keys <code>type</code>, <code>text</code>, <code>marks</code>, <code>modelAnswer</code>, <code>options</code>, <code>options[i].text</code>, <code>options[i]</code>, index from 0): "Type is required.", "Type must be Mcq or Essay.", "Text is required.", "Text must be at most 4000 characters.", "Marks are required.", "Marks must be greater than 0.", "Marks must be at most 9999.99.", "Marks can have at most 2 decimal places.", "Model answer must be at most 4000 characters.", "An MCQ question needs at least 2 options.", "An MCQ question can have at most N options." (N = <code>Exams:MaxMcqOptions</code>, default 8), "An MCQ question needs exactly one correct option.", "Options must not repeat the same text.", "Option is required.", "Option text is required.", "Option text must be at most 1000 characters.", "An Essay question has no options.".</p>
+
+<h4>DELETE /api/questions/{id}</h4>
+<p>204, empty body. Later questions move up one position. 409 <code>exam_not_editable</code> when the exam is not editable, or when deleting the <strong>last</strong> question of a Published exam ("A published exam must keep at least one question."). 404 <code>question_not_found</code>.</p>
+
+<h3>C.6 Admin endpoints (implemented; reference only – no React screens)</h3>
+<p>Policy <code>AdminOnly</code> (<code>AdminAccountsController</code>, route prefix <code>api/admin</code>). They manage Student and Instructor accounts only, never Admin accounts (D21). Admin screens belong to the Flutter app (owner decision). The only use in this project's frontend work is creating an instructor account for local testing (F.6).</p>
+<table>
+  <tr><th style="width:38%">Endpoint</th><th>Contract summary</th></tr>
+  <tr><td><code>GET /api/admin/accounts?role=&amp;status=&amp;page=&amp;pageSize=</code></td><td>Students and instructors only; role Student/Instructor, status Active/Deactivated, page ≥ 1, pageSize 1–100 (default <strong>20</strong>). 200 <code>{ items, page, pageSize, totalCount }</code>; items have <code>id, fullName, email, role, accountStatus, mustChangePassword, temporaryPasswordExpiresAt, isLockedOut, createdAt, lastLoginAt, statusChangedAt, statusReason</code>. <code>Cache-Control: no-store</code>.</td></tr>
+  <tr><td><code>GET /api/admin/accounts/{id}</code></td><td>One account with the same 12 fields; 404 <code>account_not_found</code>.</td></tr>
+  <tr><td><code>POST /api/admin/instructors</code></td><td><code>{ fullName, email }</code> → 201 <code>{ id, fullName, email, role, temporaryPassword, temporaryPasswordExpiresAt }</code> (password shown only once); 409 <code>duplicate_account</code>.</td></tr>
+  <tr><td><code>POST /api/admin/accounts/{id}/temporary-password</code></td><td>200 <code>{ temporaryPassword, temporaryPasswordExpiresAt }</code>.</td></tr>
+  <tr><td><code>POST /api/admin/accounts/{id}/deactivate</code> · <code>/reactivate</code></td><td><code>{ reason }</code> (required for deactivate, optional for reactivate, max 500) → 204; 409 <code>account_status_unchanged</code>.</td></tr>
+</table>
+</section>
+
+<!-- ===================== D ===================== -->
+<section class="page-break">
+<h2 id="sD">D. Business logic and UI behaviour</h2>
+
+<h3>D.1 Exam creation and editing</h3>
+<ul>
+  <li>Fields: title, description, start date/time, duration. Never show inputs for status, warning limit, published time or owner.</li>
+  <li>Start time must be in the future (server clock). On edit, the check applies only if the start time is changed; send the original <code>startsAt</code> string back unchanged if the user did not touch the field (avoids minute-rounding being treated as a change).</li>
+  <li>Edit is possible only while <code>status</code> is Draft or Published <em>and</em> <code>phase</code> is Upcoming. Hide or disable "Edit" otherwise and explain why. The server is authoritative: if the exam starts while the page is open, PUT returns 409 → show <code>detail</code> and reload the exam.</li>
+  <li>Concurrent edits: the later save wins (no version field). <span class="tag t-rec">RECOMMENDATION</span> reload after saving.</li>
+</ul>
+
+<h3>D.2 Time zone handling</h3>
+<ul>
+  <li>Input: the instructor enters local wall-clock time (<code>&lt;input type="datetime-local"&gt;</code>). Send it with the browser's offset, e.g. <code>2026-11-01T09:00:00+03:00</code>, or as UTC <code>Z</code> via <code>Date.toISOString()</code>. Both are valid. Never send a value without an offset (rejected) and never treat local time as UTC.</li>
+  <li>Output: the server always returns UTC (<code>+00:00</code>). Display in local time and state the time zone near date fields.</li>
+  <li><code>phase</code> is computed by the server when the exam is read; it can become stale while a page stays open.</li>
+</ul>
+
+<h3>D.3 Duration</h3>
+<p>Whole minutes, 1–360 (6 hours). <code>endsAt</code> is computed by the server.</p>
+
+<h3>D.4 States and lifecycle actions</h3>
+<table>
+  <tr><th style="width:17%">Exam</th><th style="width:17%">Edit exam / questions</th><th style="width:13%">Delete</th><th style="width:18%">Publish</th><th style="width:17%">Unpublish</th><th>Cancel</th></tr>
+  <tr><td>Draft, before start</td><td>allowed</td><td>204</td><td>allowed if valid</td><td>409 "The exam is not published."</td><td>409 "Only a published exam can be cancelled."</td></tr>
+  <tr><td>Draft, at/after start</td><td>409 <code>exam_not_editable</code></td><td>204</td><td>409 "The start time has passed."</td><td>409 "The exam is not published."</td><td>409 "Only a published exam can be cancelled."</td></tr>
+  <tr><td>Published, before start</td><td>allowed (not the last question's deletion)</td><td>409 <code>exam_not_editable</code></td><td>409 "The exam is already published."</td><td>allowed</td><td>allowed</td></tr>
+  <tr><td>Published, at/after start</td><td>409 <code>exam_not_editable</code></td><td>409</td><td>409 "The exam is already published."</td><td>409 "The start time has passed."</td><td>409 "The start time has passed."</td></tr>
+  <tr><td>Cancelled (terminal)</td><td>409 <code>exam_not_editable</code></td><td>409</td><td>409 "A cancelled exam cannot be published."</td><td>409 "A cancelled exam cannot be unpublished."</td><td>409 "The exam is already cancelled."</td></tr>
+</table>
+<p><strong>Publish refusal messages</strong> (first blocking problem, questions in position order): "The exam has no questions.", "Question N has no text.", "Question N has more than 4000 characters of text.", "Question N has invalid marks.", "Question N has a model answer longer than 4000 characters.", "Question N is an essay question and must not have options.", "Question N has an option without text.", "Question N has an option longer than 1000 characters.", "Question N needs at least 2 options.", "Question N has more options than the current maximum of M.", "Question N needs exactly one correct option.", "Question N repeats an option text.". In practice, for API-created questions only the first, the start-time message and the maximum-options message can occur.</p>
+<p>UI rules: show Publish only for Draft; Unpublish and Cancel only for Published; Delete only for Draft; disable lifecycle buttons when <code>phase</code> is not Upcoming (Delete stays available for a Draft). Every action opens a confirmation dialog; Cancel and Delete are marked <strong>irreversible</strong>. On success, replace the displayed exam with the 200 response. On 409/404, show <code>detail</code> (or the friendly 404 text) and reload the exam. Never change the status locally without a server response.</p>
+<p class="small">Known backend limitation: under a narrow race (another request changes the status at the same moment) a refusal's <code>detail</code> can read "The start time has passed." although the real reason was the status. The 409 itself is correct.</p>
+
+<h3>D.5 Questions</h3>
+<ul>
+  <li>Whole-question writes: the form sends the full question including all options; a PUT replaces everything.</li>
+  <li>Positions are server-assigned (append; renumber after delete). There is no reordering; don't offer drag-and-drop.</li>
+  <li>MCQ: at least 2 options; exactly one correct (use radio buttons); option texts must be distinct (trimmed, case-insensitive); the maximum count is a server setting (default 8) that is <strong>not exposed by the API</strong> – don't hard-block at 8; show the server's 400 message if exceeded. If the maximum was lowered, existing over-limit questions stay stored; editing <em>another</em> question still works; publishing reports the over-limit question.</li>
+  <li>Essay: no options (send <code>[]</code>); hide option controls.</li>
+  <li>Marks: number &gt; 0, ≤ 9999.99, at most 2 decimals; display with 2 decimals.</li>
+  <li>Model answer: optional; visible to the instructor only (students never receive it).</li>
+  <li>Writes allowed only while the exam is Draft/Published and Upcoming. Questions can always be read.</li>
+  <li>Deleting the only question of a Published exam is refused (409); explain it in the delete dialog.</li>
+</ul>
+
+<h3>D.6 Validation errors</h3>
+<p>Map <code>errors</code> keys to fields: sign-up keys <code>fullName</code>, <code>email</code>, <code>password</code>, <code>confirmPassword</code>; exam keys <code>title</code>, <code>description</code>, <code>startsAt</code>, <code>durationMinutes</code>; question keys <code>type</code>, <code>text</code>, <code>marks</code>, <code>modelAnswer</code>, <code>options</code> (group), <code>options[i].text</code> / <code>options[i]</code> (the i-th option in the order sent, 0-based); auth keys <code>email</code>, <code>password</code>, <code>currentPassword</code>, <code>newPassword</code>. Show <code>detail</code> above the form. Malformed-JSON errors use framework key names – show the general message.</p>
+
+<h3>D.7 Pagination, sorting, filters</h3>
+<p>Exams: <code>page</code>/<code>pageSize</code> (1–100, default 10) and <code>status</code> only. No search, no custom sort (newest start first is fixed). Questions: no paging. <span class="tag t-rec">RECOMMENDATION</span> keep filter and page in the URL query string.</p>
+
+<h3>D.8 Ownership and access denied</h3>
+<p>Instructors only see their own exams. Another instructor's exam id gives 404 – show "not found or not yours". Admin and Student accounts get 403 without a code on all exam endpoints – show an "instructor access only" screen.</p>
+
+<h3>D.9 Temporary password flow</h3>
+<p>Admin-created instructors receive a temporary password (default lifetime 72 hours, <code>Auth:TemporaryPasswordHours</code>). Login returns <code>mustChangePassword: true</code>; route the user to the change-password page; all other endpoints answer 403 <code>password_change_required</code> until changed. An expired temporary password → 403 <code>temporary_password_expired</code> at login: tell the user to ask an administrator.</p>
+
+<h3>D.10 Student sign-up (owner decision: included)</h3>
+<ul>
+  <li>Form fields exactly as C.3: full name, email, password, confirm password. No role, university or any other field.</li>
+  <li>Client checks mirror the server (required fields, 150-character name, basic email shape, password policy, confirmation matches); the server stays authoritative and its <code>errors</code> are mapped to the four fields (<code>password</code> may carry several Identity policy messages).</li>
+  <li>On 201: clear the form (including both passwords) and show a success panel: "Your student account has been created. Student exam features are not available in this app yet." with a "Sign in" link. Do <strong>not</strong> sign in automatically and do not store anything from the response.</li>
+  <li>On 409 <code>duplicate_account</code>: show the message on the email field. On 429: "Too many attempts, wait a minute".</li>
+  <li>A Student who signs in gets the "Instructor access only" screen plus the same note; exam lists for students do not exist (<code>me/exams</code> is blocked by §2.4).</li>
+</ul>
+</section>
+
+<!-- ===================== E ===================== -->
+<section class="page-break">
+<h2 id="sE">E. Authentication and security</h2>
+<table>
+  <tr><th style="width:26%">Topic</th><th>Verified behaviour and required frontend handling</th></tr>
+  <tr><td>Sign-in</td><td><code>POST /api/auth/login</code> → <code>TokenResponse</code>. No cookies are used; tokens are only in the JSON body.</td></tr>
+  <tr><td>Access token</td><td>JWT, HS256, issuer <code>ExamProctoring.Api</code>, audience <code>ExamProctoring.Clients</code>, lifetime 15 minutes (configurable), 30 s clock skew. Send <code>Authorization: Bearer &lt;token&gt;</code>. Use <code>accessTokenExpiresAt</code> to refresh slightly early. Claims (<code>sub</code>, <code>role</code>, security stamp) should not be parsed for authorization; use <code>user</code> from the token response.</td></tr>
+  <tr><td>Per-request account gate</td><td>The server checks on every request that the account exists, is Active and has the same security stamp. After a password change or admin action, old access tokens get 401 <code>token_invalid</code>.</td></tr>
+  <tr><td>Refresh</td><td><code>POST /api/auth/refresh</code> with the refresh token → a new pair. Refresh tokens rotate; reusing an old one revokes the session (401 <code>refresh_token_reused</code>). <strong>Required:</strong> only one refresh at a time across the whole app (single-flight); retry the original request once after a successful refresh; sign out when refresh fails with 401/403.</td></tr>
+  <tr><td>Logout</td><td><code>POST /api/auth/logout</code> with the refresh token and the access token; 204. Clear local tokens even if the call fails. The access token remains technically valid until expiry (max 15 min).</td></tr>
+  <tr><td>Protected routes</td><td>Require a session; redirect to the change-password page while <code>mustChangePassword</code>; show "instructor access only" for other roles. Frontend checks are for UX only.</td></tr>
+  <tr><td>401 vs 403</td><td>401 <code>token_invalid</code>: try one refresh, else sign in again. 403 <code>password_change_required</code>: change password. 403 without code: wrong role. Other 401/403 codes at login: show <code>detail</code>.</td></tr>
+  <tr><td>Token storage</td><td><strong>Required for this project</strong> (as already implemented in the draft's <code>src/auth/tokenStore.ts</code>): the access token in memory only; the refresh token in <code>sessionStorage</code>, so a reload in the same tab keeps the session and closing the tab ends it. <strong>Never</strong> store either token in <code>localStorage</code>, URLs or logs, and never render untrusted HTML. Trade-off: any script running on the page can read <code>sessionStorage</code>, so XSS must be prevented (React escapes text; no <code>dangerouslySetInnerHTML</code>). Keeping the refresh token in memory only is stricter but loses the session on reload. HttpOnly cookies would be safer still, but the backend returns tokens only in JSON (no cookie option) and changing that is a backend change. The only value this app keeps in <code>localStorage</code> is the language preference (H.9).</td></tr>
+  <tr><td>Rate limits</td><td>Per IP: login 10/min, refresh 30/min, register 5/min → 429.</td></tr>
+  <tr><td>Secrets</td><td>No backend secret belongs in the frontend. Everything in <code>VITE_*</code> variables is public.</td></tr>
+</table>
+<div class="box warn"><strong>Security limitations to document in the frontend README:</strong> tokens readable by JavaScript (no HttpOnly cookies); no rate limits or body-size limits on exam/question endpoints (backend hardening planned for Phase 7); no CSRF concerns because no cookies are used.</div>
+</section>
+
+<!-- ===================== F ===================== -->
+<section class="page-break">
+<h2 id="sF">F. Frontend-to-backend integration</h2>
+
+<h3>F.1 Backend URLs (verified in <code>src/ExamProctoring.Api/Properties/launchSettings.json</code>)</h3>
+<table>
+  <tr><th style="width:20%">Launch profile</th><th>URLs</th><th style="width:30%">Environment</th></tr>
+  <tr><td><code>https</code></td><td><code>https://localhost:7046</code> and <code>http://localhost:5168</code></td><td>Development</td></tr>
+  <tr><td><code>http</code></td><td><code>http://localhost:5168</code></td><td>Development</td></tr>
+</table>
+<p>Both profiles bind to <strong>localhost only</strong>. <code>Program.cs</code> runs <code>UseHttpsRedirection</code> before CORS, and its effect depends on the profile:</p>
+<ul>
+  <li><code>dotnet run --project src/ExamProctoring.Api --launch-profile http</code>: no HTTPS endpoint, so nothing is redirected; <code>http://localhost:5168</code> answers directly (verified live 2026-10-23). This is the profile the owner uses and the <strong>default for this project</strong>: no development certificate is involved.</li>
+  <li><code>--launch-profile https</code>: requests to <code>http://localhost:5168</code> are redirected to <code>https://localhost:7046</code>; a cross-origin browser call to the http URL would then fail its CORS preflight, so use the https URL with this profile.</li>
+</ul>
+<p>Running the published DLL without a profile uses the Production environment (no User Secrets, no Swagger).</p>
+
+<h3>F.2 CORS (verified in <code>Program.cs</code> and <code>appsettings.json</code>)</h3>
+<p>One policy allows only the origins in <code>Cors:WebExamOrigins</code> (any header, any method, no credentials). The list is <strong>empty</strong>, so a browser app on another origin is blocked. Two options:</p>
+<ol>
+  <li><span class="tag t-rec">RECOMMENDED for development</span> Vite dev-server proxy: forward <code>/api</code> to the backend URL of the profile in use (<code>http://localhost:5168</code> for the <code>http</code> profile, <code>https://localhost:7046</code> for <code>https</code>); the browser stays same-origin; no backend change.</li>
+  <li>Direct calls: the backend team adds the frontend origin (e.g. <code>http://localhost:5173</code> in development) to <code>Cors:WebExamOrigins</code>. This is a backend configuration change (decision D24) requiring approval; production needs the real origin.</li>
+</ol>
+
+<h3>F.3 HTTPS certificate</h3>
+<p>Only relevant with the <code>https</code> profile. The ASP.NET Core development certificate (<code>dotnet dev-certs https --trust</code>) is trusted by Windows browsers but not by Node.js, so a Vite proxy to <code>https://localhost:7046</code> needs <code>secure: false</code> (the draft's default, local development only) or Node configured to trust the certificate. With the <code>http</code> profile and a proxy to <code>http://localhost:5168</code> no certificate is involved.</p>
+
+<h3>F.4 Environment variables</h3>
+<pre><code># .env.example (placeholders only – no secrets)
+VITE_API_BASE_URL=                            # empty = same origin (dev proxy); or the API URL when CORS allows it
+VITE_DEV_PROXY_TARGET=http://localhost:5168   # "http" profile; use https://localhost:7046 with the "https" profile
+VITE_DEV_PROXY_VERIFY_TLS=false               # only matters for an https target</code></pre>
+<p class="small">The draft's current <code>frontend/.env.example</code> sets <code>VITE_DEV_PROXY_TARGET=https://localhost:7046</code>; change it to match the profile actually used. <code>.env.local</code> is ignored by Git.</p>
+
+<h3>F.5 API client <span class="tag t-rec">RECOMMENDATION</span></h3>
+<ul>
+  <li>One <code>apiRequest&lt;T&gt;(path, { method, body, signal, auth })</code> function: JSON in/out, Bearer header, 204 → undefined, ProblemDetails → typed <code>ApiError { status, code, detail, fieldErrors, kind: 'http' | 'network' | 'aborted' }</code>.</li>
+  <li>Refresh handling inside the client (single-flight, retry once, sign out on failure); never refresh after login failures (codes other than <code>token_invalid</code>).</li>
+  <li>Pass an <code>AbortController</code> signal from page loaders to cancel obsolete requests.</li>
+  <li>Never show <code>detail</code> of 5xx responses (in Development it may contain internal exception text).</li>
+</ul>
+<pre><code>// src/api/exams.ts – example service functions matching the real routes
+export const listExams = (p: { status?: ExamStatus; page: number; pageSize: number }, signal?: AbortSignal) =&gt; {
+  const q = new URLSearchParams({ page: String(p.page), pageSize: String(p.pageSize) });
+  if (p.status) q.set('status', p.status);
+  return apiRequest&lt;ExamPage&gt;(`/api/exams?${q}`, { signal });
+};
+export const getExam    = (id: string, signal?: AbortSignal) =&gt; apiRequest&lt;Exam&gt;(`/api/exams/${encodeURIComponent(id)}`, { signal });
+export const createExam = (r: ExamRequest) =&gt; apiRequest&lt;Exam&gt;('/api/exams', { method: 'POST', body: r });
+export const updateExam = (id: string, r: ExamRequest) =&gt; apiRequest&lt;Exam&gt;(`/api/exams/${encodeURIComponent(id)}`, { method: 'PUT', body: r });
+export const deleteExam = (id: string) =&gt; apiRequest&lt;void&gt;(`/api/exams/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const lifecycle  = (id: string, action: 'publish' | 'unpublish' | 'cancel') =&gt;
+  apiRequest&lt;Exam&gt;(`/api/exams/${encodeURIComponent(id)}/${action}`, { method: 'POST' });
+
+// src/api/questions.ts
+export const listQuestions  = (examId: string, signal?: AbortSignal) =&gt; apiRequest&lt;{ items: Question[] }&gt;(`/api/exams/${examId}/questions`, { signal });
+export const createQuestion = (examId: string, r: QuestionRequest) =&gt; apiRequest&lt;Question&gt;(`/api/exams/${examId}/questions`, { method: 'POST', body: r });
+export const updateQuestion = (id: string, r: QuestionRequest) =&gt; apiRequest&lt;Question&gt;(`/api/questions/${id}`, { method: 'PUT', body: r });
+export const deleteQuestion = (id: string) =&gt; apiRequest&lt;void&gt;(`/api/questions/${id}`, { method: 'DELETE' });</code></pre>
+<pre><code>// Local datetime-local value -> API value with an explicit offset
+export function localInputToApi(value: string): string {
+  const d = new Date(value);                       // "2026-11-01T09:00" is parsed as LOCAL time
+  const off = -d.getTimezoneOffset(), sign = off &gt;= 0 ? '+' : '-', a = Math.abs(off);
+  const p = (n: number) =&gt; String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00` +
+         `${sign}${p(Math.floor(a / 60))}:${p(a % 60)}`;
+}</code></pre>
+
+<h3>F.6 Backend setup for live integration (each developer machine)</h3>
+<p>The owner's machine is already set up (database migrated, first Admin seeded on 2026-10-23, API running with the <code>http</code> profile). A developer running the backend on their own machine needs:</p>
+<ol>
+  <li><strong>.NET SDK 10.0.402</strong> (pinned in <code>global.json</code>) and a reachable <strong>SQL Server</strong>.</li>
+  <li><strong>User Secrets</strong> for <code>src/ExamProctoring.Api</code> (never in <code>appsettings*.json</code>, never committed):
+<pre><code>dotnet user-secrets set "ConnectionStrings:Default" "&lt;your SQL Server connection string&gt;" --project src/ExamProctoring.Api
+dotnet user-secrets set "Jwt:SigningKey" "&lt;Base64 of at least 32 random bytes&gt;" --project src/ExamProctoring.Api
+dotnet user-secrets set "Seed:AdminEmail" "&lt;first admin email&gt;" --project src/ExamProctoring.Api
+dotnet user-secrets set "Seed:AdminPassword" "&lt;first admin password&gt;" --project src/ExamProctoring.Api</code></pre>
+  A missing or short <code>Jwt:SigningKey</code> stops the API at startup (<code>JwtOptions</code> validation). The seed settings are read <strong>only while no Admin exists</strong> (D20): on an empty database the API stops without them; once the Admin exists, changing them changes nothing. They must satisfy the password policy (8+ characters, upper case, lower case, digit). Prefer ASCII letters for passwords typed from PowerShell.</li>
+  <li><strong>Migrations</strong>, applied manually (never at startup): <code>dotnet tool restore</code>, then <code>dotnet ef database update --project src/ExamProctoring.Infrastructure --startup-project src/ExamProctoring.Api</code>.</li>
+  <li><strong>Start the API</strong>: <code>dotnet run --project src/ExamProctoring.Api --launch-profile http</code> → <code>http://localhost:5168</code>; check <code>http://localhost:5168/health</code>.</li>
+  <li><strong>Create an instructor account</strong> (no React admin screens; call the admin API once from Windows PowerShell). Passwords are typed at hidden prompts and the JSON is sent as UTF-8; the instructor's temporary password is printed once, so treat the output as secret:
+<pre><code>$base = 'http://localhost:5168'
+function Plain($s) { [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)) }
+function Utf8Json($o) { ,[Text.Encoding]::UTF8.GetBytes(($o | ConvertTo-Json)) }
+$ct = 'application/json; charset=utf-8'
+$adminEmail = Read-Host 'Admin email'
+$adminPass  = Read-Host 'Admin password' -AsSecureString
+$login = Invoke-RestMethod -Method Post -Uri "$base/api/auth/login" -ContentType $ct -Body (Utf8Json @{ email = $adminEmail; password = (Plain $adminPass) })
+$name  = Read-Host 'Instructor full name'
+$email = Read-Host 'Instructor email'
+$created = Invoke-RestMethod -Method Post -Uri "$base/api/admin/instructors" -ContentType $ct -Headers @{ Authorization = "Bearer $($login.accessToken)" } -Body (Utf8Json @{ fullName = $name; email = $email })
+"Temporary password (shown once): $($created.temporaryPassword)  expires: $($created.temporaryPasswordExpiresAt)"
+Remove-Variable adminPass, login, created</code></pre>
+  The instructor then signs in to the React app with that temporary password (valid 72 hours) and must change it (D.9). Five wrong passwords lock an account for 15 minutes.</li>
+  <li><strong>Node.js</strong> 22.12 or later (24 LTS recommended) on the frontend machine.</li>
+</ol>
+
+<h3>F.7 Access from another computer on the same network</h3>
+<p><code>localhost</code> always means "this computer". A browser on another computer must use the LAN address of the machine that runs the servers (for example <code>http://192.168.1.20:5173</code>; find it with <code>ipconfig</code>). The API's launch profiles listen on localhost only and <code>Cors:WebExamOrigins</code> is empty.</p>
+<ul>
+  <li><span class="tag t-rec">RECOMMENDED</span> Run the Vite dev server on the <strong>same machine as the API</strong> with <code>npm run dev -- --host</code> (listens on all interfaces). Other computers open <code>http://&lt;LAN-IP&gt;:5173</code>; the Vite proxy forwards <code>/api</code> to <code>http://localhost:5168</code> on that machine. No backend binding or CORS change is needed; allow inbound TCP 5173 in Windows Firewall (private network profile only).</li>
+  <li>Alternative (backend change, needs the owner's approval; <strong>not done</strong>): make the API listen on the LAN (for example <code>--urls http://0.0.0.0:5168</code> or a launch-profile change), allow inbound TCP 5168 in the firewall, and add the frontend's exact origin (for example <code>http://192.168.1.21:5173</code>) to <code>Cors:WebExamOrigins</code>; then set <code>VITE_API_BASE_URL</code> to <code>http://&lt;API-LAN-IP&gt;:5168</code>.</li>
+  <li>Plain HTTP on a LAN sends passwords and tokens unencrypted; acceptable only on a trusted development network.</li>
+</ul>
+</section>
+
+<!-- ===================== G ===================== -->
+<section class="page-break">
+<h2 id="sG">G. Recommended React project structure</h2>
+<p>Stack (already chosen by the existing draft, which is to be reused): Vite + React + TypeScript, React Router, plain CSS, Vitest + Testing Library + jsdom. Location: <code>frontend/</code> at the repository root (separate from <code>src/</code>, the .NET backend). The tree below is the target; the draft's actual layout (G.2) may be kept where it differs only in folder names. For translations, a small in-house dictionary (G.3) is enough; a library such as <code>i18next</code> is optional.</p>
+<h3>G.1 Target structure</h3>
+<pre><code>frontend/
+  index.html  package.json  tsconfig.json  vite.config.ts  .env.example  README.md
+  src/
+    app/          App.tsx (providers), routes.tsx
+    api/          client.ts (apiRequest, refresh), errors.ts (ApiError, describeError),
+                  auth.ts, exams.ts, questions.ts
+    types/        api.ts – DTO interfaces mirroring the backend (below)
+    features/
+      auth/       AuthContext.tsx, tokenStore.ts, RequireInstructor.tsx, LoginPage.tsx, ChangePasswordPage.tsx,
+                  RegisterPage.tsx (student sign-up)
+    i18n/         LanguageContext.tsx (lang + dir), ar.ts, en.ts (same keys), LanguageToggle.tsx
+      exams/      ExamListPage.tsx, ExamDetailsPage.tsx, ExamForm.tsx, ExamActions.tsx, Create/EditExamPage.tsx
+      questions/  QuestionsPanel.tsx, QuestionForm.tsx
+    components/   ConfirmDialog, Alert, Spinner, EmptyState, FormField, Pagination, StatusBadge
+    layouts/      AppLayout.tsx (header + outlet)
+    hooks/        useLoader.ts (abortable loading)
+    utils/        dates.ts (offset conversion, formatting), validation.ts (early checks)
+    test/         setup.ts, fixtures.ts</code></pre>
+<h3>DTO interfaces to define (must match the backend exactly)</h3>
+<pre><code>type Role = 'Admin' | 'Instructor' | 'Student';
+interface AuthUser { id: string; fullName: string; email: string; role: Role }
+interface TokenResponse { tokenType: string; accessToken: string; accessTokenExpiresAt: string; refreshToken: string;
+  refreshTokenExpiresAt: string; mustChangePassword: boolean; user: AuthUser }
+type ExamStatus = 'Draft' | 'Published' | 'Cancelled';
+type ExamPhase = 'Upcoming' | 'Open' | 'Closed';
+interface Exam { id: string; title: string; description: string | null; startsAt: string; durationMinutes: number;
+  endsAt: string; status: ExamStatus; phase: ExamPhase; warningLimit: number; publishedAt: string | null }
+interface ExamPage { items: Exam[]; page: number; pageSize: number; totalCount: number }
+interface ExamRequest { title: string; description: string | null; startsAt: string; durationMinutes: number }
+type QuestionType = 'Mcq' | 'Essay';
+interface QuestionOption { id: string; text: string; isCorrect: boolean; position: number }
+interface Question { id: string; examId: string; type: QuestionType; text: string; marks: number;
+  modelAnswer: string | null; position: number; options: QuestionOption[] }
+interface QuestionRequest { type: QuestionType; text: string; marks: number; modelAnswer: string | null;
+  options: { text: string; isCorrect: boolean }[] }
+interface ProblemDetails { status?: number; title?: string; detail?: string; code?: string;
+  errors?: Record&lt;string, string[]&gt; }
+interface RegisterRequest { fullName: string; email: string; password: string; confirmPassword: string }
+interface RegisterResponse { id: string; fullName: string; email: string; role: 'Student' }</code></pre>
+<p>Backend-imposed requirements (not optional): string enums with exact casing in responses, offset-bearing <code>startsAt</code>, camelCase JSON, Bearer header, ProblemDetails parsing. Everything else in this section is a recommendation.</p>
+
+<h3>G.2 Reusing the existing <code>frontend/</code> draft (owner decision)</h3>
+<p>The draft (36 source files, untracked) was written against the contracts in Section C, but has <strong>never been installed, type-checked, tested or built</strong>. Reuse it; do not replace it. First run <code>npm install</code>, <code>npm run typecheck</code>, <code>npm test</code> and <code>npm run build</code>, fix what fails, and only then extend it.</p>
+<table>
+  <tr><th style="width:34%">Draft files</th><th style="width:18%">Status</th><th>Notes</th></tr>
+  <tr><td><code>src/api/client.ts</code>, <code>errors.ts</code>, <code>auth.ts</code>, <code>exams.ts</code>, <code>questions.ts</code></td><td>Reuse</td><td>Single-flight refresh, <code>ApiError</code>/ProblemDetails parsing, routes as in C. Add <code>register()</code> to <code>auth.ts</code>.</td></tr>
+  <tr><td><code>src/types/api.ts</code></td><td>Reuse</td><td>Add the register types (G.1).</td></tr>
+  <tr><td><code>src/auth/tokenStore.ts</code>, <code>AuthContext.tsx</code>, <code>ProtectedRoute.tsx</code></td><td>Reuse</td><td>Already follows E (memory + <code>sessionStorage</code>, never <code>localStorage</code>).</td></tr>
+  <tr><td><code>src/utils/dates.ts</code>, <code>validation.ts</code>, <code>hooks/useLoader.ts</code></td><td>Reuse</td><td>Date formatting must take the active language (H.9).</td></tr>
+  <tr><td><code>src/components/*</code> (10 files), <code>src/pages/*</code> (5 files), <code>App.tsx</code>, <code>main.tsx</code></td><td>Reuse, then translate</td><td>All UI text is hard-coded English; move it to the dictionaries.</td></tr>
+  <tr><td><code>src/styles.css</code></td><td>Adapt</td><td>4 rules use physical left/right properties; replace them with logical ones for RTL (H.9).</td></tr>
+  <tr><td><code>index.html</code></td><td>Adapt</td><td>Fixed <code>lang="en"</code>; set <code>lang</code>/<code>dir</code> at runtime.</td></tr>
+  <tr><td>4 test files, <code>src/test/*</code></td><td>Reuse</td><td>Extend per K.</td></tr>
+  <tr><td><code>.env.example</code></td><td>Adapt</td><td>Proxy target per F.4.</td></tr>
+  <tr><td><code>package.json</code></td><td><span class="tag t-unv">UNVERIFIED</span></td><td>Pinned versions (React 19.3.1, react-router-dom 7.18.4, Vite 8.3.5, TypeScript 7.0.2, Vitest 5.0.5, jsdom 30.1.3 and others) have never been installed; no lockfile. Adjust any version that does not resolve and record the change.</td></tr>
+  <tr><td>Missing</td><td>Build</td><td>Sign-up page and route, localization layer, language toggle.</td></tr>
+</table>
+
+<h3>G.3 Translation dictionaries</h3>
+<p>One dictionary per language with identical keys (TypeScript should fail if a key is missing in either). Keys for every visible string, including validation messages the frontend generates and friendly texts per error <code>code</code> (Section I). Exam titles, descriptions, question text and option text are user content and are shown exactly as stored, in either language.</p>
+</section>
+
+<!-- ===================== H ===================== -->
+<section class="page-break">
+<h2 id="sH">H. UI/UX and validation specification</h2>
+<h3>H.1 Navigation and layout</h3>
+<p>Top header (app name, Exams, New exam, user name, Sign out); content max-width ~1100 px; on phones the header wraps and tables become cards. Pages: Sign in and Change password are centred cards without the header.</p>
+<h3>H.2 Exam list</h3>
+<p>Columns: Title (link; description excerpt), Starts (local), Duration, Status badge (Draft grey, Published green, Cancelled red), Phase badge (Upcoming / In progress / Ended). Toolbar: Status select, Per-page select (values within 1–100). Pagination: Previous/Next, "Page x of y", "x–y of total". States: loading spinner, error with "Try again", empty ("No exams yet" with create link; "No draft exams" when filtered; "past the end" when page &gt; last).</p>
+<h3>H.3 Exam form (create/edit)</h3>
+<table>
+  <tr><th style="width:20%">Field</th><th style="width:20%">Control</th><th>Client checks (mirror backend)</th></tr>
+  <tr><td>Title</td><td>text</td><td>required after trim; ≤ 200</td></tr>
+  <tr><td>Description</td><td>textarea + counter</td><td>optional; ≤ 2000 after trim; blank → null</td></tr>
+  <tr><td>Start</td><td>datetime-local + time-zone hint</td><td>required; valid; in the future (only if changed on edit); send with offset</td></tr>
+  <tr><td>Duration (min)</td><td>number, step 1</td><td>required; integer 1–360</td></tr>
+</table>
+<p>Show warning limit read-only on edit. Buttons: Cancel (back), Save/Create (disabled while saving, label "Saving…"). On server 400 map field errors; on 409 show <code>detail</code>.</p>
+<h3>H.4 Exam details and actions</h3>
+<p>Details grid (Starts, Ends, Duration, Published, Warning limit). Action buttons per D.4; disabled buttons have an explanatory note ("This exam has started …"). Confirmation dialogs: Publish ("the server checks every question"), Unpublish, Cancel (<strong>cannot be undone</strong>, danger style), Delete (<strong>deletes the exam and all questions permanently</strong>, danger style). Success alerts: "The exam is published." / "back in Draft" / "cancelled"; Delete navigates to the list.</p>
+<h3>H.5 Questions panel</h3>
+<p>Header with count and total marks; "Add question" when editable; read-only notice otherwise; list items show Q number, MCQ/Essay badge, marks, text, options (correct marked with text "(correct answer)" for screen readers, not colour alone), model answer; Edit/Delete per item. Empty state: "Add at least one question before publishing." Delete dialog mentions renumbering and the Published-exam rule.</p>
+<h3>H.6 Question editor</h3>
+<table>
+  <tr><th style="width:20%">Field</th><th style="width:22%">Control</th><th>Client checks</th></tr>
+  <tr><td>Type</td><td>select MCQ / Essay</td><td>Essay hides options and sends <code>[]</code></td></tr>
+  <tr><td>Marks</td><td>decimal text input</td><td>required; number &gt; 0; ≤ 9999.99; ≤ 2 decimals</td></tr>
+  <tr><td>Text</td><td>textarea</td><td>required after trim; ≤ 4000</td></tr>
+  <tr><td>Options (MCQ)</td><td>rows: radio (correct) + text + Remove; "Add option"</td><td>≥ 2 rows (Remove disabled at 2); each text required ≤ 1000; exactly one radio; no repeated text (trim, case-insensitive); no fixed maximum in the UI (server reports it)</td></tr>
+  <tr><td>Model answer</td><td>textarea</td><td>optional; ≤ 4000; blank → null</td></tr>
+</table>
+<h3>H.7 Sign-in and password forms</h3>
+<p>Login: email (required), password (required), link "Create a student account". Change password: current, new, repeat (must match; frontend-only); hint with the password policy; server messages per field. Sign up: full name, email, password, confirm password (all required; policy hint under the password; the confirm field is sent as <code>confirmPassword</code>, it is part of the backend contract); success panel per D.10.</p>
+<h3>H.8 Accessibility and responsiveness</h3>
+<ul>
+  <li>Labels linked to inputs; errors linked with <code>aria-describedby</code>; <code>aria-invalid</code> on invalid fields; alerts with <code>role="alert"</code>; dialogs with <code>role="dialog"</code>, focus on open, Escape to close.</li>
+  <li>Visible focus outlines; colour is never the only signal; respect reduced motion.</li>
+  <li>Breakpoints: phone (single column, cards), tablet/desktop (two-column forms, table).</li>
+</ul>
+<h3>H.9 Arabic / English, RTL / LTR (owner decision)</h3>
+<table>
+  <tr><th style="width:24%">Topic</th><th>Rule</th></tr>
+  <tr><td>Languages</td><td>Arabic (<code>ar</code>, right-to-left) and English (<code>en</code>, left-to-right). <strong>Arabic is the default</strong> on a first visit.</td></tr>
+  <tr><td>Toggle</td><td>Visible on every page (header; also the sign-in, sign-up and change-password cards). Labels in their own language: "العربية" and "English". Switching is instant, keeps the current page and form input, and does not touch the session.</td></tr>
+  <tr><td>Persistence</td><td>Store only the chosen language code in <code>localStorage</code> (for example key <code>lang</code>), wrapped in try/catch; fall back to Arabic. No tokens or personal data there.</td></tr>
+  <tr><td>Document direction</td><td>Set <code>&lt;html lang="ar" dir="rtl"&gt;</code> or <code>&lt;html lang="en" dir="ltr"&gt;</code> whenever the language changes.</td></tr>
+  <tr><td>CSS</td><td>Use logical properties (<code>margin-inline-start</code>, <code>padding-inline-end</code>, <code>inset-inline-start</code>, <code>text-align: start</code>) instead of left/right; mirror direction-bearing icons (arrows, "previous/next"); do not mirror numbers, code, emails or the clock.</td></tr>
+  <tr><td>Mixed text</td><td>Emails, GUIDs, times and English server messages inside Arabic text are wrapped with <code>dir="ltr"</code> or <code>&lt;bdi&gt;</code>; user-entered exam and question text uses <code>dir="auto"</code>.</td></tr>
+  <tr><td>Dates and numbers</td><td>Format with <code>Intl.DateTimeFormat</code> / <code>Intl.NumberFormat</code> using the active language (<code>ar</code> or <code>en</code>) and the browser's time zone; show the time-zone name next to date fields. Inputs (<code>datetime-local</code>, marks, duration) accept Western digits as the backend expects.</td></tr>
+  <tr><td>Server messages</td><td>The backend returns English <code>detail</code> and field messages. Show a translated text for known <code>code</code> values (Section I) and known field rules; when the server sends a message the app cannot map (for example a publish refusal naming question N), show the server's English text as is, marked <code>dir="ltr"</code>.</td></tr>
+  <tr><td>Fonts</td><td>A font stack that covers Arabic (for example <code>"Segoe UI", Tahoma, "Noto Naskh Arabic", sans-serif</code>).</td></tr>
+</table>
+
+<p><strong>Out of scope / pending:</strong> webcam monitoring, audio detection, suspicious-behaviour dashboards, AI question generation, student exam-taking pages, results, integrity and collusion reports.</p>
+</section>
+
+<!-- ===================== I ===================== -->
+<section class="page-break">
+<h2 id="sI">I. Error handling matrix</h2>
+<p>Codes below are verified in <code>ErrorCodes.cs</code>/<code>ErrorResults.cs</code> and the auth handlers. "UI behaviour" is a <span class="tag t-rec">RECOMMENDATION</span>.</p>
+<table>
+  <tr><th style="width:8%">HTTP</th><th style="width:24%">code</th><th style="width:28%">Meaning (backend)</th><th>UI behaviour</th></tr>
+  <tr><td>400</td><td><code>validation_failed</code></td><td>Field rules failed; <code>errors</code> lists messages per field</td><td>Show messages next to fields; general <code>detail</code> above the form</td></tr>
+  <tr><td>401</td><td><code>token_invalid</code></td><td>Missing/invalid/expired token, deactivated account, changed security stamp; or refresh token invalid/expired</td><td>Refresh once and retry; otherwise sign out → login ("Your session has ended")</td></tr>
+  <tr><td>401</td><td><code>invalid_credentials</code></td><td>Wrong email or password</td><td>Show <code>detail</code> on the login form</td></tr>
+  <tr><td>401</td><td><code>account_locked</code></td><td>Too many failed attempts (15 min)</td><td>Show <code>detail</code>; no retry loop</td></tr>
+  <tr><td>401</td><td><code>refresh_token_reused</code></td><td>Old refresh token reused; session revoked</td><td>Sign out; explain the session ended</td></tr>
+  <tr><td>403</td><td><code>password_change_required</code></td><td>Temporary password must be changed</td><td>Go to the change-password page</td></tr>
+  <tr><td>403</td><td><code>account_deactivated</code></td><td>Account deactivated by an admin</td><td>Show <code>detail</code>; sign out</td></tr>
+  <tr><td>403</td><td><code>temporary_password_expired</code></td><td>Temporary password expired</td><td>Show <code>detail</code> ("ask an administrator")</td></tr>
+  <tr><td>403</td><td>(none)</td><td>Wrong role</td><td>"Instructor access only" screen</td></tr>
+  <tr><td>404</td><td><code>exam_not_found</code></td><td>Unknown, malformed or another instructor's exam</td><td>"Exam not found or not yours"; link back to the list</td></tr>
+  <tr><td>404</td><td><code>question_not_found</code></td><td>Unknown, malformed or another instructor's question</td><td>Show message; reload the question list</td></tr>
+  <tr><td>409</td><td><code>exam_not_editable</code></td><td>Exam started/cancelled, Published/Cancelled delete, or last question of a Published exam</td><td>Show <code>detail</code>; reload exam</td></tr>
+  <tr><td>409</td><td><code>exam_not_publishable</code></td><td>Publish refused (first blocking problem)</td><td>Show <code>detail</code>; reload exam</td></tr>
+  <tr><td>409</td><td><code>exam_not_unpublishable</code></td><td>Unpublish refused</td><td>Show <code>detail</code>; reload exam</td></tr>
+  <tr><td>409</td><td><code>exam_not_cancellable</code></td><td>Cancel refused</td><td>Show <code>detail</code>; reload exam</td></tr>
+  <tr><td>409</td><td><code>duplicate_account</code></td><td>Sign-up: an account with this email already exists</td><td>Translated message on the email field</td></tr>
+  <tr><td>409</td><td><code>account_status_unchanged</code></td><td>Admin only (no React screens)</td><td>–</td></tr>
+  <tr><td>404</td><td><code>account_not_found</code></td><td>Admin only (no React screens)</td><td>–</td></tr>
+  <tr><td>413</td><td>(none)</td><td>Auth request body &gt; 16 KB</td><td>Generic message</td></tr>
+  <tr><td>429</td><td>(none)</td><td>Rate limit on login (10/min), refresh (30/min), register (5/min) per IP</td><td>"Too many attempts, wait a minute"</td></tr>
+  <tr><td>500</td><td>(none)</td><td>Unhandled server error (no stack trace; message only in Development)</td><td>Generic message; never show <code>detail</code></td></tr>
+  <tr><td>–</td><td>network</td><td>No response (server down, CORS block, certificate)</td><td>"Cannot reach the server"; retry button</td></tr>
+</table>
+</section>
+
+<!-- ===================== J ===================== -->
+<section class="page-break">
+<h2 id="sJ">J. Implementation plan</h2>
+<table>
+  <tr><th style="width:4%">#</th><th style="width:20%">Phase</th><th>Tasks</th><th style="width:15%">Depends on</th><th style="width:25%">Acceptance criteria</th></tr>
+  <tr><td>1</td><td>Contract verification</td><td>Re-read the controllers/DTOs listed in Section 0 and compare with Section C (scope is fixed by the owner decisions in Section 0)</td><td>–</td><td>Differences recorded (source wins)</td></tr>
+  <tr><td>2</td><td>Validate the existing draft</td><td>With Node 22.12+ installed: <code>npm install</code>, <code>npm run typecheck</code>, <code>npm test</code>, <code>npm run build</code> in <code>frontend/</code>; fix failures (including unresolvable package versions); set <code>.env.example</code> per F.4</td><td>1</td><td>All four commands pass on the draft as it is</td></tr>
+  <tr><td>3</td><td>API client + auth (review)</td><td>Review the draft's <code>apiRequest</code>, <code>ApiError</code>, DTO types, token store and single-flight refresh against E; add <code>register()</code></td><td>2</td><td>Unit tests for parsing, refresh, sign-out on failure, register</td></tr>
+  <tr><td>3a</td><td>Localization layer</td><td>Language context, <code>ar</code>/<code>en</code> dictionaries, toggle, <code>lang</code>/<code>dir</code> on <code>&lt;html&gt;</code>, logical CSS, locale-aware dates (H.9); move all existing text into the dictionaries</td><td>2</td><td>Every page renders correctly in Arabic (RTL, default) and English (LTR)</td></tr>
+  <tr><td>3b</td><td>Student sign-up</td><td>Register page, route, link from sign-in, success panel (D.10)</td><td>3, 3a</td><td>Field errors, 409 and 429 handled; no automatic sign-in</td></tr>
+  <tr><td>4</td><td>Routing + layout</td><td>Protected routes, password-change redirect, role screen, header</td><td>3</td><td>Route tests pass</td></tr>
+  <tr><td>5</td><td>Exam list</td><td>Status filter, pagination, states</td><td>4</td><td>Matches C.4 query rules</td></tr>
+  <tr><td>6</td><td>Exam create/edit/details</td><td>Forms, time-zone conversion, details page</td><td>5</td><td>Offset sent; UTC displayed locally; field errors shown</td></tr>
+  <tr><td>7</td><td>Questions</td><td>Panel, editor, MCQ/Essay, delete</td><td>6</td><td>Rules H.6; server errors per option</td></tr>
+  <tr><td>8</td><td>Lifecycle</td><td>Publish/unpublish/cancel/delete with dialogs</td><td>6</td><td>Table D.4 respected; 409 <code>detail</code> shown; exam reloaded</td></tr>
+  <tr><td>9</td><td>Validation + errors</td><td>Matrix I everywhere; network errors</td><td>3–8</td><td>No raw errors shown</td></tr>
+  <tr><td>10</td><td>Styling + a11y</td><td>Responsive layouts, focus, ARIA</td><td>5–8</td><td>Usable at 375 px and 1280 px; keyboard-only flow works</td></tr>
+  <tr><td>11</td><td>Tests + integration</td><td>Component tests; live run against a seeded local backend</td><td>All; F.6</td><td>Checklist K passes; live results reported honestly</td></tr>
+</table>
+</section>
+
+<!-- ===================== K ===================== -->
+<section class="page-break">
+<h2 id="sK">K. Testing and acceptance checklist</h2>
+<p>Automated (mocked <code>fetch</code>) tests can run without the backend. Items marked <strong>[LIVE]</strong> need the backend running with a seeded admin, an instructor account, migrations applied and the dev proxy or CORS configured (F.6).</p>
+<h3>Authentication</h3>
+<ul class="checklist">
+  <li>Login success stores the session; instructor lands on the exam list.</li>
+  <li>Login 401 <code>invalid_credentials</code> / <code>account_locked</code>, 403 <code>account_deactivated</code> / <code>temporary_password_expired</code>, 429 show the right message and do not trigger a refresh.</li>
+  <li><code>mustChangePassword: true</code> forces the change-password page; other pages redirect there; success returns to the exam list. [LIVE]</li>
+  <li>Expired access token → one refresh → original request retried; parallel requests trigger only one refresh.</li>
+  <li>Refresh rejected → signed out, redirected to login.</li>
+  <li>Logout calls the API and clears tokens even when the call fails.</li>
+  <li>Student/Admin account sees "instructor access only"; backend 403 confirmed. [LIVE]</li>
+</ul>
+<h3>Exams</h3>
+<ul class="checklist">
+  <li>List: default page 10; status filter in each value; page size change; next/previous; past-the-end page; empty state.</li>
+  <li>Create: valid exam → 201 → details page; start time sent with the browser offset; displayed correctly in local time. [LIVE for round trip]</li>
+  <li>Invalid submissions: empty title, 201-character title, 2001-character description, past start, duration 0 and 361 → messages; server 400 field errors mapped.</li>
+  <li>Edit: unchanged start time is sent unchanged; started or cancelled exam shows read-only explanation; 409 from server shown.</li>
+  <li>Delete Draft (confirm) → list; Delete not offered for Published/Cancelled.</li>
+  <li>Unknown or another instructor's exam id → not-found message. [LIVE]</li>
+</ul>
+<h3>Questions</h3>
+<ul class="checklist">
+  <li>MCQ create with 2+ options, one correct → appears at the end; Essay create sends no options.</li>
+  <li>Client blocks: no text, marks 0 / 10000 / 1.005, &lt; 2 options, no correct option, repeated option text.</li>
+  <li>Server 400 for too many options shows the server message next to the options group. [LIVE]</li>
+  <li>Edit replaces options; MCQ→Essay removes options; Essay→MCQ requires valid options.</li>
+  <li>Delete renumbers positions; deleting the only question of a Published exam shows the 409 message. [LIVE]</li>
+  <li>Read-only panel after start / when cancelled.</li>
+</ul>
+<h3>Lifecycle</h3>
+<ul class="checklist">
+  <li>Publish with no questions → 409 "The exam has no questions." shown; exam reloaded.</li>
+  <li>Publish valid Draft → status Published, publishedAt shown; Unpublish → Draft, publishedAt cleared; publish again → new time. [LIVE]</li>
+  <li>Cancel requires confirmation; "Keep" sends nothing; confirm → Cancelled; all actions then hidden.</li>
+  <li>Buttons disabled after the start time; Delete of a past Draft still possible.</li>
+</ul>
+<h3>Student sign-up</h3>
+<ul class="checklist">
+  <li>Valid four-field form → 201 → success panel with the sign-in link; form and passwords cleared; no tokens stored; no automatic sign-in.</li>
+  <li>Client blocks empty fields, a 151-character name and mismatched passwords; server 400 messages appear on <code>fullName</code>, <code>email</code>, <code>password</code> (several policy messages) and <code>confirmPassword</code>.</li>
+  <li>An existing email → 409 <code>duplicate_account</code> shown on the email field. [LIVE]</li>
+  <li>The request body contains exactly <code>fullName</code>, <code>email</code>, <code>password</code>, <code>confirmPassword</code>.</li>
+  <li>A Student who signs in sees "Instructor access only" with the D.10 note. [LIVE]</li>
+</ul>
+<h3>Arabic / English</h3>
+<ul class="checklist">
+  <li>First visit (empty storage) shows Arabic with <code>&lt;html lang="ar" dir="rtl"&gt;</code>; the toggle switches to English with <code>lang="en" dir="ltr"</code> and back, keeping the page and form input.</li>
+  <li>The choice survives a reload (stored language code only); if storage is unavailable the app still works in Arabic.</li>
+  <li>Both dictionaries have the same keys (type check or test).</li>
+  <li>Layouts mirror correctly in RTL (header, tables, forms, dialogs, pagination arrows); emails and times stay LTR.</li>
+  <li>Dates and times are formatted for the active language in the browser's time zone; untranslatable server messages appear in English, LTR.</li>
+</ul>
+<h3>General</h3>
+<ul class="checklist">
+  <li>Loading indicators and disabled buttons during requests; obsolete requests aborted on navigation.</li>
+  <li>Network failure shows "Cannot reach the server"; 500 never shows server <code>detail</code>.</li>
+  <li>Time zone: a value entered at 09:00 local is sent with the local offset and displayed back as 09:00 local.</li>
+  <li>Responsive at 375 px, 768 px, 1280 px; keyboard and screen-reader basics.</li>
+</ul>
+</section>
+
+<!-- ===================== L ===================== -->
+<section class="page-break">
+<h2 id="sL">L. Ready-to-use Claude Code prompt</h2>
+<p>Copy everything in the box into Claude Code after opening the repository root.</p>
+<pre style="break-inside:auto"><code>You are completing the React web frontend of the AI-Based Exam Proctoring System graduation project.
+The backend is the ASP.NET Core (.NET 10) Web API in src/ (SQL Server, EF Core). The specification is
+docs/AI_Exam_Proctoring_Frontend_Developer_Handover.pdf (editable source: the .html file beside it).
+
+OWNER DECISIONS (fixed; do not reopen)
+- Scope: the Instructor Dashboard, plus student sign-up. No admin screens (admin belongs to the Flutter app).
+- Reuse the existing frontend/ draft; do not replace it or start from scratch.
+- Arabic and English with a language toggle; Arabic (RTL) is the default, English is LTR.
+- Never stage, commit or push without the owner's explicit approval.
+
+BEFORE CODING
+1. Read the whole handover document, then inspect the repository: git status, frontend/ (an untracked draft
+   that has never been installed or built), architecture-proposal.md (Revision 3.10: D11, D12, D25-D36, open
+   decision 2.4). The handover document overrides architecture section 3.1 for the React scope.
+2. Verify the backend contracts in source: src/ExamProctoring.Api/Controllers/*.cs,
+   src/ExamProctoring.Application/{Auth,Exams}/*Request*.cs, *Response*.cs, *Validator*.cs,
+   Auth/AccountFieldRules.cs, Auth/EmailRules.cs, Common/ErrorCodes.cs, Api/Errors/ErrorResults.cs,
+   Api/Authorization/*, Program.cs, appsettings.json, Properties/launchSettings.json.
+3. If the source differs from the document, the backend SOURCE wins. Record each difference. Never invent
+   endpoints, fields, status codes or rules. If something needed does not exist, stop and report it as a
+   blocker or ask me one concise question.
+4. In frontend/: npm install, npm run typecheck, npm test, npm run build. Fix the draft until all pass
+   before adding features. Report exact errors and any package version you had to change.
+
+SCOPE (only these, all verified to exist)
+- Auth: POST /api/auth/login, /refresh, /logout, /change-password; GET /api/auth/me.
+  Access token in memory; refresh token in sessionStorage (never localStorage); single-flight refresh
+  (refresh tokens rotate; reuse -> 401 refresh_token_reused revokes the session); retry once; sign out
+  on failure; forced password change when mustChangePassword is true (other endpoints answer 403
+  password_change_required).
+- Student sign-up: POST /api/auth/register {fullName, email, password, confirmPassword} -> 201
+  {id, fullName, email, role} with NO tokens. Rules and messages: handover C.3. No university field
+  (D11/D12; the university decision was withdrawn). After 201 show the success panel with a sign-in link
+  (handover D.10); no automatic sign-in. 409 duplicate_account on the email field; 429 rate limit.
+- Exams: GET /api/exams?status=&amp;page=&amp;pageSize= (status Draft|Published|Cancelled, page&gt;=1,
+  pageSize 1-100 default 10, newest start first), POST /api/exams (201), GET/PUT/DELETE /api/exams/{id}
+  (PUT 200, DELETE 204 Draft only). ExamRequest {title, description, startsAt, durationMinutes}:
+  title 1-200, description &lt;=2000, startsAt WITH an offset and in the future, duration 1-360.
+  Never send warningLimit/status/publishedAt. Responses are UTC; show local time.
+- Lifecycle: POST /api/exams/{id}/publish | /unpublish | /cancel -&gt; 200 ExamResponse; refusals 409
+  exam_not_publishable | exam_not_unpublishable | exam_not_cancellable with a readable detail.
+  Cancel is terminal. Rules: handover section D.4.
+- Questions: GET/POST /api/exams/{examId}/questions ({items}, not paged; 201), PUT/DELETE
+  /api/questions/{id} (200/204). QuestionRequest {type: Mcq|Essay, text, marks, modelAnswer, options
+  [{text, isCorrect}]}: text 1-4000, marks &gt;0 &lt;=9999.99 max 2 decimals, model answer optional &lt;=4000,
+  MCQ 2..N options (N is a server setting, default 8, not exposed), exactly one correct, no repeated
+  text; Essay has no options. PUT replaces all options. Positions are server-assigned, no reordering.
+  Writes only while the exam is Draft/Published and phase Upcoming; deleting the last question of a
+  Published exam -&gt; 409 exam_not_editable.
+- OUT OF SCOPE: admin screens, student exam pages and exam taking, webcam/audio, proctoring, results,
+  AI generation, reports (no endpoints exist for the student and proctoring features).
+
+IMPLEMENTATION
+- Keep the draft's structure (handover G.2); add src/i18n (language context, ar/en dictionaries with the
+  same keys, toggle) and the register page; follow handover H.9 for RTL/LTR: lang and dir on &lt;html&gt;,
+  logical CSS properties, locale-aware dates, only the language code in localStorage.
+- Dev proxy /api -&gt; http://localhost:5168 (launch profile "http"; use https://localhost:7046 only with the
+  "https" profile). .env.example contains placeholders only, no secrets.
+- Pages and states per sections B, D and H: loading, empty, validation (map errors keys such as startsAt,
+  options[1].text, confirmPassword), 401/403/404/409/429/500 and network errors per section I with
+  translated texts; confirmation dialogs for publish, unpublish, cancel (irreversible) and delete
+  (irreversible). Never trust local status; use server responses and reload after 409/404. Never show
+  detail of 5xx responses.
+- Responsive and accessible (labels, aria-invalid, focus, keyboard) in both directions.
+
+SAFETY
+- Do not modify backend files (src/, tests/, migrations, appsettings, launchSettings) unless I authorize it.
+- Preserve all existing work; do not overwrite or delete unrelated files.
+- Never stage, commit, push, reset, stash or discard Git changes without my explicit authorization.
+- Do not install system software without asking; npm packages inside frontend/ are fine.
+
+VERIFY AND REPORT
+- Run npm run typecheck, npm test and npm run build. Add tests per handover section K (API client,
+  refresh, protected routes, sign-up, lifecycle errors, time zones, Arabic/English and RTL/LTR).
+- Live integration needs the backend set up as in handover F.6 (User Secrets, migrations, an instructor
+  account). If that is not available, say so; never claim untested integration works.
+- Finish with: implemented features, created/changed files, commands run and their real results,
+  remaining issues/blockers, and the exact commands to start backend and frontend.</code></pre>
+<p class="small">End of document.</p>
+</section>
+</body>
+</html>
