@@ -24,7 +24,9 @@ public static class PublicationCheck
                 return $"{label} has no text.";
             if (text.Length > ExamFieldLimits.QuestionTextMaxLength)
                 return $"{label} has more than {ExamFieldLimits.QuestionTextMaxLength} characters of text.";
-            if (!QuestionRules.MarksAreValid(question.Marks))
+            if (question.Marks is not { } marks)
+                return $"{label} has no marks. Add marks before publishing.";
+            if (!QuestionRules.MarksAreValid(marks))
                 return $"{label} has invalid marks.";
             if (question.ModelAnswer?.Trim().Length > ExamFieldLimits.ModelAnswerMaxLength)
                 return $"{label} has a model answer longer than {ExamFieldLimits.ModelAnswerMaxLength} characters.";

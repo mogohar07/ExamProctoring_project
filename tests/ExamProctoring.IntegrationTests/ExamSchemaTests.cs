@@ -58,7 +58,7 @@ public sealed class ExamSchemaTests(ApiFactory factory)
             NVarCharColumn("Questions", "Type", 30, nullable: false),
             NVarCharColumn("Questions", "Text", ExamFieldLimits.QuestionTextMaxLength, nullable: false),
             NVarCharColumn("Questions", "ModelAnswer", ExamFieldLimits.ModelAnswerMaxLength, nullable: true),
-            new() { TableName = "Questions", ColumnName = "Marks", TypeName = "decimal", MaxLength = 5, Precision = 6, Scale = 2, IsNullable = false },
+            new() { TableName = "Questions", ColumnName = "Marks", TypeName = "decimal", MaxLength = 5, Precision = 6, Scale = 2, IsNullable = true },
             IntColumn("Questions", "Position"),
 
             GuidColumn("QuestionOptions", "Id"),
@@ -186,6 +186,20 @@ public sealed class ExamSchemaTests(ApiFactory factory)
         await using var scope = factory.Services.CreateAsyncScope();
         var marks = await Db(scope).Questions.Where(q => q.ExamId == exam.Id).OrderBy(q => q.Position).Select(q => q.Marks).ToListAsync(Ct);
         Assert.Equal([0.01m, 9999.99m], marks);
+    }
+
+    // MakeQuestionMarksNullable (owner decision 2026-10-25): marks not set yet are stored as NULL, never as a default,
+    // and CK_Questions_Marks still rejects 0 and below.
+    [Fact]
+    public async Task QuestionWithoutMarks_IsStoredAsNull()
+    {
+        var exam = await InsertExamAsync();
+
+        await SaveAsync(db => db.Questions.Add(NewQuestion(exam.Id, 1, q => q.Marks = null)));
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var marks = await Db(scope).Questions.Where(q => q.ExamId == exam.Id).Select(q => q.Marks).SingleAsync(Ct);
+        Assert.Null(marks);
     }
 
     [Fact]

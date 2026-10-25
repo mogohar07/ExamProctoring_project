@@ -71,7 +71,8 @@ export interface Question {
   examId: string;
   type: QuestionType;
   text: string;
-  marks: number;
+  // null: not set yet. Allowed only while the exam is a Draft (for example after a Word import); publishing requires it.
+  marks: number | null;
   modelAnswer: string | null;
   position: number;
   options: QuestionOption[];
@@ -89,7 +90,8 @@ export interface QuestionOptionRequest {
 export interface QuestionRequest {
   type: QuestionType;
   text: string;
-  marks: number;
+  // null is accepted only for a Draft exam.
+  marks: number | null;
   modelAnswer: string | null;
   options: QuestionOptionRequest[];
 }

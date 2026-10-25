@@ -2,6 +2,7 @@ using ExamProctoring.Application.Abstractions;
 using ExamProctoring.Application.Accounts;
 using ExamProctoring.Application.Auth;
 using ExamProctoring.Application.Exams;
+using ExamProctoring.Application.Exams.Import;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -16,6 +17,7 @@ public static class DependencyInjection
         services.AddScoped<AccountAdminService>();
         services.AddScoped<ExamService>();
         services.AddScoped<QuestionService>();
+        services.AddScoped<ExamImportService>();
         services.AddSingleton<IExamSettings, ConfiguredExamSettings>();
         services.AddScoped<AuthService>();
 

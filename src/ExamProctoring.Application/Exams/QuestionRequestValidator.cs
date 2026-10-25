@@ -6,7 +6,8 @@ using FluentValidation;
 namespace ExamProctoring.Application.Exams;
 
 // Field rules for creating and replacing a question (D31, D32, D35). Texts are checked after trimming. The MCQ maximum
-// is the configured value in force now, and only the question being written is checked against it (D34).
+// is the configured value in force now, and only the question being written is checked against it (D34). Marks may be
+// missing (null): QuestionService allows that only while the exam is a Draft, and publishing requires them.
 public sealed class QuestionRequestValidator : AbstractValidator<QuestionRequest>
 {
     public QuestionRequestValidator(IExamSettings settings)
@@ -21,14 +22,14 @@ public sealed class QuestionRequestValidator : AbstractValidator<QuestionRequest
             .Must(text => text is null || text.Trim().Length <= ExamFieldLimits.QuestionTextMaxLength)
                 .WithMessage($"Text must be at most {ExamFieldLimits.QuestionTextMaxLength} characters.");
 
-        // One message at a time: the first rule the value breaks.
+        // One message at a time: the first rule the value breaks. Missing marks are not an error here.
         RuleFor(r => r.Marks)
             .Cascade(CascadeMode.Stop)
-            .Must(marks => marks is not null).WithMessage("Marks are required.")
             .Must(marks => marks > 0).WithMessage("Marks must be greater than 0.")
             .Must(marks => marks <= QuestionRules.MaxMarks).WithMessage(string.Create(CultureInfo.InvariantCulture, $"Marks must be at most {QuestionRules.MaxMarks}."))
             .Must(marks => QuestionRules.MarksAreValid(marks!.Value))
-                .WithMessage($"Marks can have at most {QuestionRules.MarksDecimalPlaces} decimal places.");
+                .WithMessage($"Marks can have at most {QuestionRules.MarksDecimalPlaces} decimal places.")
+            .When(r => r.Marks is not null);
 
         RuleFor(r => r.ModelAnswer)
             .Must(answer => answer is null || answer.Trim().Length <= ExamFieldLimits.ModelAnswerMaxLength)

@@ -25,7 +25,8 @@ export function QuestionForm({ question, onSubmit, onCancel }: QuestionFormProps
 
   const [type, setType] = useState<QuestionType>(question?.type ?? 'Mcq');
   const [text, setText] = useState(question?.text ?? '');
-  const [marks, setMarks] = useState(question ? question.marks.toFixed(2) : '1');
+  // A question saved without marks (Draft only) starts with an empty field: the instructor enters them here.
+  const [marks, setMarks] = useState(question ? (question.marks === null ? '' : question.marks.toFixed(2)) : '1');
   const [modelAnswer, setModelAnswer] = useState(question?.modelAnswer ?? '');
   const [options, setOptions] = useState<OptionDraft[]>(() =>
     question && question.options.length > 0

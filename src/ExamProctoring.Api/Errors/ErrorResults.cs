@@ -29,6 +29,8 @@ public static class ErrorResults
         [ErrorCodes.ExamNotPublishable] = StatusCodes.Status409Conflict,
         [ErrorCodes.ExamNotUnpublishable] = StatusCodes.Status409Conflict,
         [ErrorCodes.ExamNotCancellable] = StatusCodes.Status409Conflict,
+        [ErrorCodes.ImportFileUnsupported] = StatusCodes.Status400BadRequest,
+        [ErrorCodes.ImportFileUnreadable] = StatusCodes.Status400BadRequest,
     };
 
     // statusCode overrides the usual status for the code, for an endpoint that documents a different one.
@@ -65,6 +67,16 @@ public static class ErrorResults
         var factory = context.HttpContext.RequestServices.GetRequiredService<ProblemDetailsFactory>();
         var problem = factory.CreateValidationProblemDetails(context.HttpContext, context.ModelState, StatusCodes.Status400BadRequest);
         problem.Extensions[CodeExtension] = ErrorCodes.ValidationFailed;
+        return ProblemResult(problem);
+    }
+
+    // 413 with the same title as the size-limit responses of GlobalExceptionHandler, for a limit the endpoint checks
+    // itself (the in-memory test server does not enforce request body limits).
+    public static IActionResult PayloadTooLarge(this ControllerBase controller, string detail)
+    {
+        var factory = controller.HttpContext.RequestServices.GetRequiredService<ProblemDetailsFactory>();
+        var problem = factory.CreateProblemDetails(controller.HttpContext, StatusCodes.Status413PayloadTooLarge,
+            title: "The request body is too large.", detail: detail);
         return ProblemResult(problem);
     }
 

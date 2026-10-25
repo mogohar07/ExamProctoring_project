@@ -1,6 +1,7 @@
 using ExamProctoring.Application.Abstractions;
 using ExamProctoring.Application.Common;
 using ExamProctoring.Domain.Users;
+using ExamProctoring.Infrastructure.Documents;
 using ExamProctoring.Infrastructure.Identity;
 using ExamProctoring.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -53,6 +54,9 @@ public static class DependencyInjection
         services.AddOptions<JwtOptions>().BindConfiguration(JwtOptions.SectionName).ValidateOnStart();
         services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
         services.AddSingleton<ITokenService, JwtTokenService>();
+
+        // Word (.docx) reading for the exam import; stateless and in memory.
+        services.AddSingleton<IDocxTextExtractor, OpenXmlDocxTextExtractor>();
 
         services.AddHealthChecks()
             .AddDbContextCheck<AppDbContext>("database");

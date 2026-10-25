@@ -3,12 +3,14 @@ using Microsoft.AspNetCore.RateLimiting;
 
 namespace ExamProctoring.Api.RateLimiting;
 
-// Per-IP fixed-window limits for the anonymous auth endpoints (§6.7): register 5/min, login 10/min, refresh 30/min.
+// Per-IP fixed-window limits (§6.7): the anonymous auth endpoints (register 5/min, login 10/min, refresh 30/min) and
+// the Word import (10/min). Rate limiting runs before authentication, so the client IP is the only key available.
 public static class RateLimitPolicies
 {
     public const string Register = "register";
     public const string Login = "login";
     public const string Refresh = "refresh";
+    public const string DocxImport = "docx-import";
 
     public static IServiceCollection AddApiRateLimiting(this IServiceCollection services)
     {
@@ -20,6 +22,7 @@ public static class RateLimitPolicies
             options.AddPolicy(Register, context => PerIpPerMinute(context, permitLimit: 5));
             options.AddPolicy(Login, context => PerIpPerMinute(context, permitLimit: 10));
             options.AddPolicy(Refresh, context => PerIpPerMinute(context, permitLimit: 30));
+            options.AddPolicy(DocxImport, context => PerIpPerMinute(context, permitLimit: 10));
         });
 
         return services;

@@ -75,9 +75,11 @@ public sealed class QuestionRequestValidatorTests
     public void Marks_WithinTheRules_AreValid(string marks) =>
         Assert.True(_validator.Validate(Mcq() with { Marks = decimal.Parse(marks, System.Globalization.CultureInfo.InvariantCulture) }).IsValid);
 
+    // Owner decision 2026-10-25: missing marks are allowed by the field rules; QuestionService allows them only in a
+    // Draft exam, and publishing requires them.
     [Fact]
-    public void Marks_Missing_IsRejected() =>
-        AssertOnlyFieldFails(Mcq() with { Marks = null }, "Marks", "Marks are required.");
+    public void Marks_Missing_IsValid() =>
+        Assert.True(_validator.Validate(Mcq() with { Marks = null }).IsValid);
 
     [Theory]
     [InlineData("0", "Marks must be greater than 0.")]

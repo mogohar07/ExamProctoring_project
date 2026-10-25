@@ -20,4 +20,6 @@ public static class ErrorCodes
     public const string ExamNotPublishable = "exam_not_publishable";
     public const string ExamNotUnpublishable = "exam_not_unpublishable";
     public const string ExamNotCancellable = "exam_not_cancellable";
+    public const string ImportFileUnsupported = "import_file_unsupported";
+    public const string ImportFileUnreadable = "import_file_unreadable";
 }

@@ -67,6 +67,12 @@ public sealed class QuestionService(
                 await OwnExams().AnyAsync(e => e.Id == id, cancellationToken) ? ExamNotEditable() : ExamNotFound());
         }
 
+        if (request.Marks is null && await IsPublishedAsync(id, cancellationToken))
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            return Result<QuestionResponse>.Failure(MarksRequiredWhenPublished());
+        }
+
         var lastPosition = await db.Questions
             .Where(q => q.ExamId == id)
             .MaxAsync(q => (int?)q.Position, cancellationToken) ?? 0;
@@ -74,7 +80,8 @@ public sealed class QuestionService(
         var question = new Question { ExamId = id, Position = lastPosition + 1 };
         Apply(question, request);
         db.Questions.Add(question);
-        var options = AddOptions(question, request);
+        var options = NewOptions(question, request);
+        db.QuestionOptions.AddRange(options);
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -112,9 +119,16 @@ public sealed class QuestionService(
             return Result<QuestionResponse>.Failure(QuestionNotFound());
         }
 
+        if (request.Marks is null && await IsPublishedAsync(examId, cancellationToken))
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            return Result<QuestionResponse>.Failure(MarksRequiredWhenPublished());
+        }
+
         await db.QuestionOptions.Where(o => o.QuestionId == id).ExecuteDeleteAsync(cancellationToken);
         Apply(question, request);
-        var options = AddOptions(question, request);
+        var options = NewOptions(question, request);
+        db.QuestionOptions.AddRange(options);
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -194,27 +208,33 @@ public sealed class QuestionService(
         return locked > 0;
     }
 
+    // Read under the exam lock. A question of a Published exam always has marks (owner decision 2026-10-25).
+    private Task<bool> IsPublishedAsync(Guid examId, CancellationToken cancellationToken) =>
+        db.Exams.AnyAsync(e => e.Id == examId && e.Status == ExamStatus.Published, cancellationToken);
+
     // The lock on a question's exam was refused: the exam's state or start time forbids the change (409), or the exam,
     // and with it the question, is gone (404).
     private async Task<AppError> RefusalAsync(Guid examId, CancellationToken cancellationToken) =>
         await OwnExams().AnyAsync(e => e.Id == examId, cancellationToken) ? ExamNotEditable() : QuestionNotFound();
 
-    // Text and model answer trimmed (D31); a blank model answer is stored as null.
-    private static void Apply(Question question, QuestionRequest request)
+    // Text and model answer trimmed (D31); a blank model answer is stored as null. Missing marks stay null: no default.
+    // Also used by ExamService.CreateWithQuestionsAsync, so both paths store a question the same way.
+    internal static void Apply(Question question, QuestionRequest request)
     {
         question.Type = QuestionRequest.ParseType(request.Type)!.Value;
         question.Text = request.Text!.Trim();
-        question.Marks = NormalizeMarks(request.Marks!.Value);
+        question.Marks = request.Marks is { } marks ? NormalizeMarks(marks) : null;
         question.ModelAnswer = string.IsNullOrWhiteSpace(request.ModelAnswer) ? null : request.ModelAnswer.Trim();
     }
 
-    // The options of an MCQ in the order given, numbered from 1, with trimmed text. An Essay has none.
-    private List<QuestionOption> AddOptions(Question question, QuestionRequest request)
+    // The options of an MCQ in the order given, numbered from 1, with trimmed text. An Essay has none. The caller adds
+    // them to the context.
+    internal static List<QuestionOption> NewOptions(Question question, QuestionRequest request)
     {
         if (question.Type != QuestionType.Mcq)
             return [];
 
-        var options = request.Options!
+        return request.Options!
             .Select((option, index) => new QuestionOption
             {
                 QuestionId = question.Id,
@@ -223,8 +243,6 @@ public sealed class QuestionService(
                 Position = index + 1,
             })
             .ToList();
-        db.QuestionOptions.AddRange(options);
-        return options;
     }
 
     // Two decimal places, as the column stores them, so 1.5, 1.50 and 1.500 are all returned as 1.50. The value itself
@@ -238,17 +256,25 @@ public sealed class QuestionService(
 
     private static AppError QuestionNotFound() => new(ErrorCodes.QuestionNotFound, "The question was not found.");
 
-    // Field names as the JSON request spells them, including nested ones such as options[1].text.
+    private static AppError MarksRequiredWhenPublished() =>
+        new(ErrorCodes.ValidationFailed, "One or more fields are invalid.",
+            new Dictionary<string, string[]> { ["marks"] = ["Marks are required for a question of a published exam."] });
+
     private async Task<AppError?> ValidationFailedAsync(QuestionRequest request, CancellationToken cancellationToken)
     {
-        var fieldErrors = (await questionValidator.ValidateAsync(request, cancellationToken)).Errors
-            .GroupBy(e => CamelCase(e.PropertyName))
-            .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).Distinct().ToArray());
+        var fieldErrors = await FieldErrorsAsync(questionValidator, request, cancellationToken);
 
         return fieldErrors.Count > 0
             ? new AppError(ErrorCodes.ValidationFailed, "One or more fields are invalid.", fieldErrors)
             : null;
     }
+
+    // Field names as the JSON request spells them, including nested ones such as options[1].text.
+    internal static async Task<Dictionary<string, string[]>> FieldErrorsAsync(
+        IValidator<QuestionRequest> validator, QuestionRequest request, CancellationToken cancellationToken) =>
+        (await validator.ValidateAsync(request, cancellationToken)).Errors
+            .GroupBy(e => CamelCase(e.PropertyName))
+            .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).Distinct().ToArray());
 
     private static string CamelCase(string propertyName) =>
         string.Join('.', propertyName.Split('.').Select(part => part.Length == 0 ? part : char.ToLowerInvariant(part[0]) + part[1..]));

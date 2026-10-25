@@ -54,7 +54,9 @@ public sealed class PublicationCheckTests
 
         Assert.Equal("Question 1 has no text.", Problem(Essay(1, q => q.Text = "  ")));
         Assert.Equal("Question 1 has more than 4000 characters of text.", Problem(Essay(1, q => q.Text = new string('q', 4001))));
+        Assert.Equal("Question 1 has no marks. Add marks before publishing.", Problem(Essay(1, q => q.Marks = null)));
         Assert.Equal("Question 1 has invalid marks.", Problem(Essay(1, q => q.Marks = 0m)));
+        Assert.Equal("Question 1 has invalid marks.", Problem(Essay(1, q => q.Marks = -1m)));
         Assert.Equal("Question 1 has invalid marks.", Problem(Essay(1, q => q.Marks = 1.005m)));
         Assert.Equal("Question 1 has a model answer longer than 4000 characters.", Problem(Essay(1, q => q.ModelAnswer = new string('a', 4001))));
     }

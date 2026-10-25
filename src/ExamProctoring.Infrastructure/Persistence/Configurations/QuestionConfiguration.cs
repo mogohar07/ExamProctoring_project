@@ -9,6 +9,8 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
 {
     public void Configure(EntityTypeBuilder<Question> builder)
     {
+        // Marks is nullable (not set yet, Draft only). The check is unchanged: SQL Server accepts NULL in "[Marks] > 0"
+        // and still rejects 0 and negative values.
         builder.ToTable(table => table.HasCheckConstraint("CK_Questions_Marks", "[Marks] > 0"));
 
         builder.Property(q => q.Type).HasConversion<string>().HasMaxLength(30);

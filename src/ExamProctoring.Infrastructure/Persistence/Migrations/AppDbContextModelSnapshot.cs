@@ -90,7 +90,7 @@ namespace ExamProctoring.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ExamId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("Marks")
+                    b.Property<decimal?>("Marks")
                         .HasPrecision(6, 2)
                         .HasColumnType("decimal(6,2)");
 

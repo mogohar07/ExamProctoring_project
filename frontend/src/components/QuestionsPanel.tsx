@@ -62,7 +62,8 @@ export function QuestionsPanel({ exam, onExamStale }: QuestionsPanelProps) {
   };
 
   const items = questions.data?.items ?? [];
-  const totalMarks = items.reduce((sum, question) => sum + question.marks, 0);
+  const totalMarks = items.reduce((sum, question) => sum + (question.marks ?? 0), 0);
+  const withoutMarks = items.filter((question) => question.marks === null).length;
 
   return (
     <section className="card" aria-labelledby="questions-heading">
@@ -72,6 +73,7 @@ export function QuestionsPanel({ exam, onExamStale }: QuestionsPanelProps) {
           {questions.data && (
             <p className="muted">
               {items.length} {items.length === 1 ? 'question' : 'questions'} · {totalMarks.toFixed(2)} marks in total
+              {withoutMarks > 0 && ` · ${withoutMarks} without marks (add them before publishing)`}
             </p>
           )}
         </div>
@@ -131,7 +133,9 @@ export function QuestionsPanel({ exam, onExamStale }: QuestionsPanelProps) {
               <div className="question-head">
                 <span className="question-number">Q{question.position}</span>
                 <span className="badge badge-neutral">{question.type === 'Mcq' ? 'MCQ' : 'Essay'}</span>
-                <span className="question-marks">{question.marks.toFixed(2)} marks</span>
+                <span className="question-marks">
+                  {question.marks === null ? 'No marks yet' : `${question.marks.toFixed(2)} marks`}
+                </span>
               </div>
               <p className="question-text">{question.text}</p>
               {question.type === 'Mcq' && (

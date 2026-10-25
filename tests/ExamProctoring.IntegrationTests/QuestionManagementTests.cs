@@ -184,7 +184,6 @@ public sealed class QuestionManagementTests(ApiFactory factory)
     [InlineData("""{"text":"Q","marks":1}""", "type", "Type is required.")]
     [InlineData("""{"type":"TrueFalse","text":"Q","marks":1}""", "type", "Type must be Mcq or Essay.")]
     [InlineData("""{"type":"Essay","text":"   ","marks":1}""", "text", "Text is required.")]
-    [InlineData("""{"type":"Essay","text":"Q"}""", "marks", "Marks are required.")]
     [InlineData("""{"type":"Essay","text":"Q","marks":0}""", "marks", "Marks must be greater than 0.")]
     [InlineData("""{"type":"Essay","text":"Q","marks":-2}""", "marks", "Marks must be greater than 0.")]
     [InlineData("""{"type":"Essay","text":"Q","marks":10000}""", "marks", "Marks must be at most 9999.99.")]
@@ -1035,7 +1034,7 @@ public sealed class QuestionManagementTests(ApiFactory factory)
     private async Task<List<string>> SnapshotAsync(Guid examId) =>
         (await StoredQuestionsAsync(examId))
             .Select(s => string.Join('|',
-                s.Question.Id, s.Question.Type, s.Question.Text, s.Question.Marks.ToString(CultureInfo.InvariantCulture),
+                s.Question.Id, s.Question.Type, s.Question.Text, s.Question.Marks?.ToString(CultureInfo.InvariantCulture),
                 s.Question.ModelAnswer, s.Question.Position,
                 string.Join(';', s.Options.Select(o => $"{o.Id}:{o.Text}:{o.IsCorrect}:{o.Position}"))))
             .ToList();

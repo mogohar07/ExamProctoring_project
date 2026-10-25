@@ -16,6 +16,7 @@ public sealed class ExamService(
     IAppDbContext db,
     IValidator<ExamRequest> examValidator,
     IValidator<ExamListQuery> listValidator,
+    IValidator<QuestionRequest> questionValidator,
     IExamSettings settings,
     IClock clock,
     ICurrentUser currentUser,
@@ -32,22 +33,81 @@ public sealed class ExamService(
         if (startsAt <= now)
             return Result<ExamResponse>.Failure(StartsAtNotInFuture());
 
-        var exam = new Exam
-        {
-            InstructorId = currentUser.UserId,
-            Title = request.Title!.Trim(),
-            Description = Normalize(request.Description),
-            StartsAt = startsAt,
-            DurationMinutes = request.DurationMinutes!.Value,
-            Status = ExamStatus.Draft,
-            WarningLimit = settings.WarningLimit,
-        };
+        var exam = NewDraft(request, startsAt);
         db.Exams.Add(exam);
         await db.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("Instructor {InstructorId} created exam {ExamId}.", currentUser.UserId, exam.Id);
 
         return Result<ExamResponse>.Success(ExamResponse.From(exam, now));
+    }
+
+    // POST /api/exams/with-questions (owner decision 2026-10-25). The reviewed questions and the exam details are saved
+    // as a new Draft exam in one transaction: every field is checked first with the rules of POST /api/exams and
+    // POST /api/exams/{id}/questions, and if anything is invalid nothing is saved. Questions may have no marks, because
+    // the exam is a Draft; publishing requires them (PublicationCheck). The exam is never published here.
+    public async Task<Result<DraftExamResponse>> CreateWithQuestionsAsync(DraftExamRequest request, CancellationToken cancellationToken)
+    {
+        var examRequest = request.ToExamRequest();
+        var fieldErrors = new Dictionary<string, string[]>();
+        if (await ValidationFailedAsync(examValidator, examRequest, cancellationToken) is { FieldErrors: { } examErrors })
+        {
+            foreach (var (field, messages) in examErrors)
+                fieldErrors[field] = messages;
+        }
+
+        var questions = request.Questions ?? [];
+        if (questions.Count == 0)
+            fieldErrors["questions"] = ["At least one question is required."];
+        else if (questions.Count > DraftExamRequest.MaxQuestions)
+            fieldErrors["questions"] = [$"At most {DraftExamRequest.MaxQuestions} questions can be saved at once."];
+        else
+        {
+            for (var i = 0; i < questions.Count; i++)
+            {
+                if (questions[i] is not { } question)
+                {
+                    fieldErrors[$"questions[{i}]"] = ["Question is required."];
+                    continue;
+                }
+                foreach (var (field, messages) in await QuestionService.FieldErrorsAsync(questionValidator, question, cancellationToken))
+                    fieldErrors[$"questions[{i}].{field}"] = messages;
+            }
+        }
+
+        if (fieldErrors.Count > 0)
+            return Result<DraftExamResponse>.Failure(new AppError(ErrorCodes.ValidationFailed, "One or more fields are invalid.", fieldErrors));
+
+        ExamStartTime.TryParse(examRequest.StartsAt, out var startsAt);
+        var now = clock.UtcNow;
+        if (startsAt <= now)
+            return Result<DraftExamResponse>.Failure(StartsAtNotInFuture());
+
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+        var exam = NewDraft(examRequest, startsAt);
+        db.Exams.Add(exam);
+
+        var saved = new List<(Question Question, List<QuestionOption> Options)>();
+        for (var i = 0; i < questions.Count; i++)
+        {
+            var question = new Question { ExamId = exam.Id, Position = i + 1 };
+            QuestionService.Apply(question, questions[i]!);
+            db.Questions.Add(question);
+            var options = QuestionService.NewOptions(question, questions[i]!);
+            db.QuestionOptions.AddRange(options);
+            saved.Add((question, options));
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        logger.LogInformation("Instructor {InstructorId} created Draft exam {ExamId} with {Count} questions ({Unmarked} without marks).",
+            currentUser.UserId, exam.Id, saved.Count, saved.Count(s => s.Question.Marks is null));
+
+        return Result<DraftExamResponse>.Success(new DraftExamResponse(
+            ExamResponse.From(exam, now),
+            saved.Select(s => QuestionResponse.From(s.Question, s.Options)).ToList()));
     }
 
     // GET /api/exams (D29). The caller's exams, newest start first, one page at a time.
@@ -284,6 +344,18 @@ public sealed class ExamService(
         await OwnExams().AsNoTracking().AnyAsync(e => e.Id == id, cancellationToken)
             ? new AppError(ErrorCodes.ExamNotEditable, "The exam can no longer be changed in its current state.")
             : ExamNotFound();
+
+    // A new Draft exam of the caller, from validated fields; its warning limit is copied from the general setting (D26).
+    private Exam NewDraft(ExamRequest request, DateTimeOffset startsAt) => new()
+    {
+        InstructorId = currentUser.UserId,
+        Title = request.Title!.Trim(),
+        Description = Normalize(request.Description),
+        StartsAt = startsAt,
+        DurationMinutes = request.DurationMinutes!.Value,
+        Status = ExamStatus.Draft,
+        WarningLimit = settings.WarningLimit,
+    };
 
     // Trimmed; blank counts as none.
     private static string? Normalize(string? text) =>

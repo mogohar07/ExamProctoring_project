@@ -3,13 +3,13 @@ using ExamProctoring.Domain.Exams;
 namespace ExamProctoring.Application.Exams;
 
 // A question as its owning instructor sees it (D35, S1): exactly these fields, including the correct option and the
-// model answer. An Essay has no options.
+// model answer. An Essay has no options. Marks is null when not set yet (Draft only).
 public sealed record QuestionResponse(
     Guid Id,
     Guid ExamId,
     string Type,
     string Text,
-    decimal Marks,
+    decimal? Marks,
     string? ModelAnswer,
     int Position,
     IReadOnlyList<QuestionOptionResponse> Options)
